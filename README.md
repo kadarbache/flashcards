@@ -201,12 +201,56 @@ ignored, and anything unusable is reported with its line number rather than
 silently dropped. Fronts already in the deck are skipped, so re-pasting a list
 is harmless.
 
-## Note on auth
+## Signing in
 
-The **web app** has none. It assumes a single local user, and Server Actions are
-reachable by direct POST, so add authentication before putting this anywhere
-public.
+The web app is behind a single account, using Auth.js (`next-auth` v5) with a
+Credentials provider. There is no user collection: the account is two
+environment variables, because a table that only ever holds one row is a table
+that only ever holds one row.
 
-The **HTTP API** is the exception: it requires `FLASHCARDS_API_KEY` and fails
-closed without one, because it is the one surface designed to be called from
-outside a browser.
+```bash
+npm run set-password
+```
+
+That asks for an email and a password (not echoed), writes `AUTH_USER_EMAIL`
+and a bcrypt hash of the password to `.env.local`, and generates `AUTH_SECRET`
+if it is missing. Restart the server afterwards.
+
+**Escape the `$` signs if you write the hash by hand.** Dotenv expands `$NAME`
+as a variable reference -- in double quotes, in single quotes and unquoted
+alike -- and a bcrypt hash looks like `$2b$12$...`, so an unescaped one is read
+as three undefined variables and arrives as an empty string. Nothing warns you;
+the app just says no account is configured. Written by hand it is
+`AUTH_PASSWORD_HASH="\$2b\$12\$..."`. On Vercel, paste the hash raw -- host
+environment variables are not expanded, so backslashes there would become part
+of the password hash.
+
+### Where the check happens
+
+Three layers, deliberately:
+
+- **`src/proxy.ts`** redirects signed-out browsers to `/login`, keeping the
+  path they wanted so they land where they meant to. This is `proxy.ts` and not
+  `middleware.ts`: Next 16 deprecated the `middleware` convention and renamed
+  it, and Auth.js's own documentation has not caught up -- a `middleware.ts`
+  here does nothing at all. Proxy also runs on the Node.js runtime by default
+  in Next 16, so none of the usual edge-safe config splitting is needed.
+- **Every Server Action** calls `requireSession()` first. Actions are POST
+  endpoints that can be hit directly without a page ever rendering, and a gate
+  that lives only in middleware is one routing mistake away from being no gate.
+- **`verifyOwner`** always runs a bcrypt comparison, even when the email is
+  already known to be wrong, against a hash nothing matches. Returning early
+  would make an unknown address answer in microseconds and the real one take
+  the ~200ms bcrypt costs, which turns the form into an oracle for which
+  address owns the account.
+
+Missing configuration locks everyone out rather than letting anyone in: with no
+`AUTH_USER_EMAIL` or `AUTH_PASSWORD_HASH`, `verifyOwner` rejects every attempt
+and the login page says so instead of silently accepting.
+
+### The HTTP API is separate
+
+`/api/decks/**` is excluded from the sign-in gate and keeps its own
+`x-api-key` check, because it is called from Postman and scripts that have no
+browser cookie. Gating it on a session would break every batch import. It fails
+closed too: no `FLASHCARDS_API_KEY` configured means **503**, never 200.

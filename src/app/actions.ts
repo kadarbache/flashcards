@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import mongoose from "mongoose";
 
+import { requireSession } from "@/lib/auth-guard";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
 import { getNextCard, type NextCardResult, type QueueOptions } from "@/lib/decks";
@@ -13,9 +14,11 @@ import { answerCard, undoLastAnswer } from "@/lib/review";
 import type { Grade } from "@/lib/srs/types";
 
 /**
- * There is no sign-in here: the app assumes a single local user, so every action
- * is open to anyone who can reach the server. Server Actions are reachable by
- * direct POST, so add authentication before putting this anywhere public.
+ * Every action starts with `requireSession()`.
+ *
+ * Server Actions are POST endpoints that can be called directly, without a page
+ * ever being rendered, so the proxy that redirects signed-out browsers does not
+ * cover them. The check belongs next to the write.
  */
 
 export interface FormState {
@@ -34,6 +37,7 @@ export async function createDeck(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  await requireSession();
   const name = text(formData, "name");
   if (name === "") {
     return { ok: false, message: "Give the deck a name." };
@@ -53,6 +57,7 @@ export async function updateDeckSettings(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  await requireSession();
   const id = text(formData, "deckId");
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return { ok: false, message: "That deck no longer exists." };
@@ -87,6 +92,7 @@ function parseSteps(value: string): number[] {
 }
 
 export async function deleteDeck(formData: FormData): Promise<void> {
+  await requireSession();
   const id = text(formData, "deckId");
   if (!mongoose.Types.ObjectId.isValid(id)) return;
 
@@ -107,6 +113,7 @@ export async function importCards(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  await requireSession();
   const id = text(formData, "deckId");
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return { ok: false, message: "That deck no longer exists." };
@@ -154,6 +161,7 @@ export async function createCard(
   _previous: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  await requireSession();
   const deckId = text(formData, "deckId");
   const front = text(formData, "front");
   const back = text(formData, "back");
@@ -186,6 +194,7 @@ function describeSkipped(entry: { line: number; text: string; reason: string }):
 }
 
 export async function deleteCard(formData: FormData): Promise<void> {
+  await requireSession();
   const cardId = text(formData, "cardId");
   const deckId = text(formData, "deckId");
   if (!mongoose.Types.ObjectId.isValid(cardId)) return;
@@ -213,6 +222,7 @@ export async function gradeCard(
   elapsedMs: number | null,
   options: QueueOptions = {},
 ): Promise<NextCardResult> {
+  await requireSession();
   const { deckId } = await answerCard(cardId, grade, elapsedMs);
 
   revalidatePath("/");
@@ -230,6 +240,7 @@ export async function undoLastGrade(
   deckId: string,
   options: QueueOptions = {},
 ): Promise<NextCardResult> {
+  await requireSession();
   const restored = await undoLastAnswer(deckId);
 
   revalidatePath("/");
@@ -246,6 +257,7 @@ export async function refreshQueue(
   deckId: string,
   options: QueueOptions = {},
 ): Promise<NextCardResult> {
+  await requireSession();
   return getNextCard(deckId, options);
 }
 
@@ -255,6 +267,7 @@ export async function deleteCardAndContinue(
   deckId: string,
   options: QueueOptions = {},
 ): Promise<NextCardResult> {
+  await requireSession();
   if (!mongoose.Types.ObjectId.isValid(cardId)) return getNextCard(deckId, options);
 
   await connectToDatabase();

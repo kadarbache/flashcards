@@ -7,12 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "set-password": "node scripts/set-password.mjs",
     "test": "node --import ./scripts/register-alias.mjs --test \"src/**/*.test.ts\"",
     "test:watch": "node --import ./scripts/register-alias.mjs --test --watch \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "mongoose": "^9.10.2",
     "next": "16.3.6",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
