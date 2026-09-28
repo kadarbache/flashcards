@@ -136,11 +136,26 @@ if (process.argv.includes("--vercel")) {
 
   const push = (key, value) =>
     new Promise((resolve) => {
-      const child = spawn(
-        process.platform === "win32" ? "vercel.cmd" : "vercel",
-        ["env", "add", key, "production", "--force"],
-        { stdio: ["pipe", "ignore", "inherit"] },
-      );
+      /*
+       * `shell: true` on Windows is required, not stylistic. The Vercel CLI is
+       * installed as vercel.cmd, and Node refuses to spawn a batch file
+       * directly -- it throws EINVAL -- because doing so safely needs a shell
+       * to interpret it. Nothing user-supplied reaches the argument list: the
+       * key is one of two literals here and the value is written to stdin, so
+       * there is no string for a shell to reinterpret.
+       */
+      const onWindows = process.platform === "win32";
+      const child = onWindows
+        ? // One string, no argument array: Node deprecates combining the two
+          // (DEP0190) because it concatenates without escaping. Every word here
+          // is a literal, so there is nothing to escape.
+          spawn(`vercel env add ${key} production --force`, {
+            stdio: ["pipe", "ignore", "inherit"],
+            shell: true,
+          })
+        : spawn("vercel", ["env", "add", key, "production", "--force"], {
+            stdio: ["pipe", "ignore", "inherit"],
+          });
       child.stdin.end(value);
       child.on("close", (code) => resolve(code === 0));
       child.on("error", () => resolve(false));
