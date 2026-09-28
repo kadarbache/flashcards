@@ -216,6 +216,16 @@ That asks for an email and a password (not echoed), writes `AUTH_USER_EMAIL`
 and a bcrypt hash of the password to `.env.local`, and generates `AUTH_SECRET`
 if it is missing. Restart the server afterwards.
 
+To set the same account on the deployed app as well:
+
+```bash
+npm run set-password -- --vercel
+```
+
+which additionally pushes both values to Vercel's production environment, with
+the hash unescaped -- see below for why that distinction matters. Redeploy
+afterwards, since changing environment variables does not rebuild on its own.
+
 **Escape the `$` signs if you write the hash by hand.** Dotenv expands `$NAME`
 as a variable reference -- in double quotes, in single quotes and unquoted
 alike -- and a bcrypt hash looks like `$2b$12$...`, so an unescaped one is read

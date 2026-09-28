@@ -102,3 +102,38 @@ writeFileSync(ENV_FILE, contents, "utf8");
 
 console.log(`Wrote AUTH_USER_EMAIL and AUTH_PASSWORD_HASH to ${ENV_FILE}.`);
 console.log("Restart the dev server for it to take effect.");
+
+/*
+ * With --vercel, send the same account to the deployed app.
+ *
+ * The hash goes up unescaped. The backslashes above exist only to survive
+ * dotenv's variable expansion when reading the file; Vercel injects the value
+ * into the process verbatim, so shipping the escaped form would make the
+ * backslashes part of the stored hash and every password would be wrong -- in
+ * production only, which is the worst place to find out.
+ */
+if (process.argv.includes("--vercel")) {
+  const { spawn } = await import("node:child_process");
+
+  const push = (key, value) =>
+    new Promise((resolve) => {
+      const child = spawn(
+        process.platform === "win32" ? "vercel.cmd" : "vercel",
+        ["env", "add", key, "production", "--force"],
+        { stdio: ["pipe", "ignore", "inherit"] },
+      );
+      child.stdin.end(value);
+      child.on("close", (code) => resolve(code === 0));
+      child.on("error", () => resolve(false));
+    });
+
+  for (const [key, value] of [
+    ["AUTH_USER_EMAIL", email],
+    ["AUTH_PASSWORD_HASH", await hash(password, COST)],
+  ]) {
+    const ok = await push(key, value);
+    console.log(`${key} -> ${ok ? "sent to Vercel production" : "FAILED (is the CLI linked?)"}`);
+  }
+
+  console.log("Redeploy for the new values to take effect: git commit --allow-empty -m redeploy && git push");
+}
