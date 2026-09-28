@@ -18,12 +18,38 @@ import {
 import type { NextCardResult } from "@/lib/decks";
 import type { Grade } from "@/lib/srs/types";
 
-/** Button colour and keyboard digit for each grade, in display order. */
+/**
+ * Button colour and keyboard digit for each grade, in display order.
+ *
+ * The tones are written out in full rather than built from the grade name --
+ * Tailwind scans source text for complete class names, so `text-${grade}` would
+ * compile to nothing.
+ */
 const BUTTONS: Array<{ grade: Grade; label: string; tone: string; key: string }> = [
-  { grade: "again", label: "Again", tone: "text-again border-again/50", key: "1" },
-  { grade: "hard", label: "Hard", tone: "text-hard border-hard/50", key: "2" },
-  { grade: "good", label: "Good", tone: "text-good border-good/50", key: "3" },
-  { grade: "easy", label: "Easy", tone: "text-easy border-easy/50", key: "4" },
+  {
+    grade: "again",
+    label: "Again",
+    tone: "text-again border-again/40 bg-again/10 hover:bg-again/20",
+    key: "1",
+  },
+  {
+    grade: "hard",
+    label: "Hard",
+    tone: "text-hard border-hard/40 bg-hard/10 hover:bg-hard/20",
+    key: "2",
+  },
+  {
+    grade: "good",
+    label: "Good",
+    tone: "text-good border-good/40 bg-good/10 hover:bg-good/20",
+    key: "3",
+  },
+  {
+    grade: "easy",
+    label: "Easy",
+    tone: "text-easy border-easy/40 bg-easy/10 hover:bg-easy/20",
+    key: "4",
+  },
 ];
 
 export function ReviewSession({
@@ -197,71 +223,89 @@ export function ReviewSession({
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-center gap-2">
-        <RoundButton
-          label="Undo last answer"
-          onClick={() => void undo()}
-          disabled={pending || reviewedToday === 0}
-        >
-          <Arrow direction="left" />
-        </RoundButton>
-
+      {/*
+       * Four equal columns rather than a flex row of pills. A grid track can
+       * shrink below its content, so the row cannot force the page sideways at
+       * any width -- the old row had a 432px floor (two 56px circles, four
+       * 68px pills, six gaps) against a ~343px phone, which is what pushed the
+       * buttons off screen. Undo and skip moved out of this line for the same
+       * reason: they are not answers, so they do not belong in the answer row.
+       */}
+      <div className="w-full space-y-3">
         {flipped ? (
-          BUTTONS.map((button) => (
-            <button
-              key={button.grade}
-              type="button"
-              onClick={() => void grade(button.grade)}
-              disabled={pending}
-              title={`${button.label} (${button.key})`}
-              className={`flex h-14 min-w-[4.25rem] flex-1 flex-col items-center justify-center rounded-full border bg-surface-raised px-2 transition disabled:opacity-40 ${button.tone}`}
-            >
-              <span className="text-sm font-semibold">{button.label}</span>
-              <span className="text-[0.7rem] text-ink-muted">
-                {card.previews[button.grade]}
-              </span>
-            </button>
-          ))
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+            {BUTTONS.map((button) => (
+              <button
+                key={button.grade}
+                type="button"
+                onClick={() => void grade(button.grade)}
+                disabled={pending}
+                title={`${button.label} (${button.key})`}
+                className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border px-1 transition active:scale-[0.97] disabled:opacity-40 ${button.tone}`}
+              >
+                <span className="text-[0.8125rem] leading-none font-semibold">
+                  {button.label}
+                </span>
+                <span className="text-[0.6875rem] leading-none tabular-nums opacity-70">
+                  {card.previews[button.grade]}
+                </span>
+              </button>
+            ))}
+          </div>
         ) : (
           <button
             type="button"
             onClick={() => setFlipped(true)}
             disabled={pending}
-            className="h-14 flex-1 rounded-full border border-border-subtle bg-surface-raised px-6 text-sm font-medium disabled:opacity-40"
+            className="flex h-16 w-full items-center justify-center gap-2 rounded-2xl border border-border-subtle bg-surface-raised text-sm font-medium transition active:scale-[0.99] disabled:opacity-40"
           >
             Show answer
-            <span className="ml-2 text-xs text-ink-muted">space</span>
+            <kbd className="hidden rounded border border-border-subtle px-1.5 py-0.5 text-[0.6875rem] font-normal text-ink-muted sm:inline">
+              space
+            </kbd>
           </button>
         )}
 
-        <RoundButton
-          label="Skip this card for now"
-          onClick={() => void skip()}
-          disabled={pending}
-        >
-          <Arrow direction="right" />
-        </RoundButton>
-      </div>
+        <div className="flex items-center gap-2 text-xs">
+          <GhostButton
+            label="Undo last answer"
+            onClick={() => void undo()}
+            disabled={pending || reviewedToday === 0}
+          >
+            <Arrow direction="left" />
+            Undo
+          </GhostButton>
 
-      <p className="text-center text-xs text-ink-muted">
-        <span className="text-easy">{counts.newCards} new</span> &middot;{" "}
-        <span className="text-again">{counts.learning} learning</span> &middot;{" "}
-        <span className="text-good">{counts.review} review</span>
-        {counts.scheduled > 0 && <> &middot; {counts.scheduled} scheduled</>}
-        {skipped.length > 0 && (
-          <>
-            {" "}
-            &middot;{" "}
-            <button
-              type="button"
-              onClick={() => void unskip()}
-              className="underline underline-offset-4"
-            >
-              {skipped.length} skipped
-            </button>
-          </>
-        )}
-      </p>
+          <p className="min-w-0 flex-1 text-center text-ink-muted">
+            <span className="text-easy">{counts.newCards} new</span> &middot;{" "}
+            <span className="text-again">{counts.learning} learning</span> &middot;{" "}
+            <span className="text-good">{counts.review} review</span>
+            {counts.scheduled > 0 && <> &middot; {counts.scheduled} scheduled</>}
+            {skipped.length > 0 && (
+              <>
+                {" "}
+                &middot;{" "}
+                <button
+                  type="button"
+                  onClick={() => void unskip()}
+                  className="underline underline-offset-4"
+                >
+                  {skipped.length} skipped
+                </button>
+              </>
+            )}
+          </p>
+
+          <GhostButton
+            label="Skip this card for now"
+            onClick={() => void skip()}
+            disabled={pending}
+          >
+            Skip
+            <Arrow direction="right" />
+          </GhostButton>
+        </div>
+      </div>
 
       {error !== null && (
         <p className="rounded-md border border-again/40 px-3 py-2 text-center text-sm text-again">
@@ -347,9 +391,14 @@ function CardFace({
         </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center px-2 py-6">
+      {/*
+       * The faces are absolutely positioned to sit on top of each other, so a
+       * long answer has nowhere to push the box -- it scrolls inside instead.
+       * `break-words` covers a single unbroken string longer than the card.
+       */}
+      <div className="flex flex-1 items-center justify-center overflow-y-auto px-2 py-6">
         <p
-          className={`text-center whitespace-pre-wrap ${
+          className={`text-center break-words whitespace-pre-wrap ${
             back ? "text-xl text-ink-muted" : "text-2xl font-medium"
           }`}
         >
@@ -368,7 +417,8 @@ function CardFace({
   );
 }
 
-function RoundButton({
+/** The quiet controls either side of the counts: undo and skip. */
+function GhostButton({
   label,
   onClick,
   disabled,
@@ -386,7 +436,7 @@ function RoundButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-raised text-easy transition disabled:opacity-30"
+      className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-ink-muted transition hover:bg-surface-raised hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-muted"
     >
       {children}
     </button>
@@ -402,7 +452,7 @@ function Arrow({ direction }: { direction: "left" | "right" }) {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`h-5 w-5 ${direction === "left" ? "" : "rotate-180"}`}
+      className={`h-3.5 w-3.5 shrink-0 ${direction === "left" ? "" : "rotate-180"}`}
       aria-hidden="true"
     >
       <path d="M19 12H5M12 19l-7-7 7-7" />
