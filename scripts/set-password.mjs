@@ -169,5 +169,9 @@ if (process.argv.includes("--vercel")) {
     console.log(`${key} -> ${ok ? "sent to Vercel production" : "FAILED (is the CLI linked?)"}`);
   }
 
-  console.log("Redeploy for the new values to take effect: git commit --allow-empty -m redeploy && git push");
+  // Printed as two lines rather than one `a && b`: PowerShell 5.1, which is
+  // still the default shell on Windows, parses `&&` as a syntax error.
+  console.log("\nRedeploy for the new values to take effect:");
+  console.log('  git commit --allow-empty -m "Redeploy"');
+  console.log("  git push");
 }
