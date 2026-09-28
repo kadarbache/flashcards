@@ -62,15 +62,34 @@ function askSecret(question) {
  * there exactly as bcrypt produced it -- backslashes would become part of it.
  */
 function upsert(contents, key, value) {
-  const line = `${key}="${String(value).replace(/\$/g, "\\$")}"`;
+  // Backslashes first, then quotes, then `$` -- reordering these would escape
+  // the escapes. An unescaped `"` would end the value early and leave the rest
+  // of the line as junk the next parser trips over.
+  const escaped = String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$");
+  const line = `${key}="${escaped}"`;
   const pattern = new RegExp(`^${key}=.*$`, "m");
   if (pattern.test(contents)) return contents.replace(pattern, line);
   return contents.replace(/\n*$/, "\n") + line + "\n";
 }
 
 const email = await ask("Email for the account: ");
-if (email === "") {
-  console.error("An email is required.");
+
+/*
+ * Anything with an @, no spaces, and a dot in the domain. This is not trying to
+ * validate email addresses -- it is catching the case where a pasted shell
+ * command lands in this prompt, which otherwise sails through and becomes the
+ * account name both here and on the host.
+ */
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  console.error(
+    email === ""
+      ? "An email is required."
+      : `That does not look like an email address: ${JSON.stringify(email)}`,
+  );
+  console.error("Nothing was written. Run the command again and enter just the address.");
   process.exit(1);
 }
 
