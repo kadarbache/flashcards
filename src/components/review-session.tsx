@@ -15,6 +15,7 @@ import {
   refreshQueue,
   undoLastGrade,
 } from "@/app/actions";
+import { Arrow, Flashcard, GhostButton } from "@/components/flashcard";
 import type { NextCardResult } from "@/lib/decks";
 import type { Grade } from "@/lib/srs/types";
 
@@ -184,44 +185,23 @@ export function ReviewSession({
     );
   }
 
-  const faceProps = {
-    stateLabel: card.stateLabel,
-    position: reviewedToday + 1,
-    total: reviewedToday + remaining,
-    menuOpen,
-    onMenuToggle: () => setMenuOpen((was) => !was),
-    onDelete: removeCard,
-    deckId,
-    deckName,
-  };
-
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-6">
-      <div
-        className={`w-full [perspective:1400px] transition-opacity ${
-          pending ? "opacity-60" : ""
-        }`}
-      >
-        <div
-          className={`relative min-h-[26rem] w-full transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:duration-0 ${
-            flipped ? "[transform:rotateY(180deg)]" : ""
-          }`}
-        >
-          <CardFace
-            {...faceProps}
-            text={card.front}
-            footer="See answer"
-            onFooterClick={() => setFlipped(true)}
-          />
-          <CardFace
-            {...faceProps}
-            back
-            text={card.back}
-            footer="Back to question"
-            onFooterClick={() => setFlipped(false)}
-          />
-        </div>
-      </div>
+      <Flashcard
+        front={card.front}
+        back={card.back}
+        flipped={flipped}
+        onFlip={setFlipped}
+        dimmed={pending}
+        label={card.stateLabel}
+        position={reviewedToday + 1}
+        total={reviewedToday + remaining}
+        menuOpen={menuOpen}
+        onMenuToggle={() => setMenuOpen((was) => !was)}
+        onDelete={removeCard}
+        deckId={deckId}
+        deckName={deckName}
+      />
 
       {/*
        * Four equal columns rather than a flex row of pills. A grid track can
@@ -313,150 +293,6 @@ export function ReviewSession({
         </p>
       )}
     </div>
-  );
-}
-
-interface FaceProps {
-  text: string;
-  stateLabel: string;
-  position: number;
-  total: number;
-  footer: string;
-  onFooterClick: () => void;
-  menuOpen: boolean;
-  onMenuToggle: () => void;
-  onDelete: () => void;
-  deckId: string;
-  deckName: string;
-  back?: boolean;
-}
-
-/**
- * One side of the flip. Both faces are stacked in the same box with
- * `backface-visibility: hidden`, so whichever one is turned away is invisible
- * and the card reads as a single object rotating rather than two swapping.
- */
-function CardFace({
-  text,
-  stateLabel,
-  position,
-  total,
-  footer,
-  onFooterClick,
-  menuOpen,
-  onMenuToggle,
-  onDelete,
-  deckId,
-  deckName,
-  back = false,
-}: FaceProps) {
-  return (
-    <div
-      className={`absolute inset-0 flex flex-col rounded-3xl border border-border-subtle bg-surface-raised p-5 [backface-visibility:hidden] ${
-        back ? "[transform:rotateY(180deg)]" : ""
-      }`}
-    >
-      <div className="flex items-start justify-between text-xs">
-        <span className="tabular-nums text-ink-muted">
-          {position} / {Math.max(total, position)}
-        </span>
-        <span className="font-medium text-good">{stateLabel}</span>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={onMenuToggle}
-            aria-label="Card options"
-            aria-expanded={menuOpen}
-            className="-mt-1 rounded-full px-2 py-1 text-base leading-none text-ink-muted hover:text-ink"
-          >
-            &#8942;
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-lg border border-border-subtle bg-surface-raised text-left shadow-lg">
-              <Link
-                href={`/decks/${deckId}`}
-                className="block truncate px-3 py-2 text-xs hover:bg-surface"
-              >
-                {deckName}
-              </Link>
-              <button
-                type="button"
-                onClick={onDelete}
-                className="block w-full px-3 py-2 text-left text-xs text-again hover:bg-surface"
-              >
-                Delete this card
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/*
-       * The faces are absolutely positioned to sit on top of each other, so a
-       * long answer has nowhere to push the box -- it scrolls inside instead.
-       * `break-words` covers a single unbroken string longer than the card.
-       */}
-      <div className="flex flex-1 items-center justify-center overflow-y-auto px-2 py-6">
-        <p
-          className={`text-center break-words whitespace-pre-wrap ${
-            back ? "text-xl text-ink-muted" : "text-2xl font-medium"
-          }`}
-        >
-          {text}
-        </p>
-      </div>
-
-      <button
-        type="button"
-        onClick={onFooterClick}
-        className="mx-auto rounded-full px-3 py-1 text-xs text-ink-muted hover:text-ink"
-      >
-        {footer}
-      </button>
-    </div>
-  );
-}
-
-/** The quiet controls either side of the counts: undo and skip. */
-function GhostButton({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-ink-muted transition hover:bg-surface-raised hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-muted"
-    >
-      {children}
-    </button>
-  );
-}
-
-function Arrow({ direction }: { direction: "left" | "right" }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`h-3.5 w-3.5 shrink-0 ${direction === "left" ? "" : "rotate-180"}`}
-      aria-hidden="true"
-    >
-      <path d="M19 12H5M12 19l-7-7 7-7" />
-    </svg>
   );
 }
 
