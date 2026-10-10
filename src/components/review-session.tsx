@@ -369,6 +369,13 @@ function QueueEmpty({
         >
           {deckName}
         </Link>
+        {/* Nothing is due, which is exactly when a no-stakes run is wanted. */}
+        <Link
+          href={`/decks/${deckId}/practice`}
+          className="rounded-full border border-border-subtle px-4 py-2 text-sm"
+        >
+          Practice anyway
+        </Link>
         {skippedCount > 0 && (
           <button
             type="button"

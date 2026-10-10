@@ -12,7 +12,7 @@ import mongoose from "mongoose";
 
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
-import { getNextCard, listCards, listDecks } from "@/lib/decks";
+import { getNextCard, listCards, listDecks, listPracticeCards } from "@/lib/decks";
 import { answerCard, undoLastAnswer } from "@/lib/review";
 
 let mongo: MongoMemoryServer;
@@ -380,6 +380,82 @@ describe("skipping", () => {
     const deckId = await seedDeck(1);
     const result = await getNextCard(deckId, { exclude: ["nonsense", ""] });
     assert.ok(result.card, "a junk exclusion should not empty the queue");
+  });
+});
+
+describe("practice", () => {
+  it("offers every card, due or not", async () => {
+    const deckId = await seedDeck(4);
+    const cards = await Card.find({}).sort({ createdAt: 1 });
+
+    // One waiting out a long interval, one mid-ladder: neither is due, and the
+    // review queue would serve neither.
+    await Card.findByIdAndUpdate(cards[0]._id, {
+      state: "review",
+      intervalDays: 60,
+      due: new Date(Date.now() + 60 * 86_400_000),
+    });
+    await Card.findByIdAndUpdate(cards[1]._id, {
+      state: "learning",
+      due: new Date(Date.now() + 10 * 60_000),
+    });
+
+    const practice = await listPracticeCards(deckId);
+    assert.deepEqual(
+      practice.map((card) => card.front).sort(),
+      ["front 1", "front 2", "front 3", "front 4"],
+    );
+  });
+
+  it("changes nothing about the cards or the history", async () => {
+    const deckId = await seedDeck(3);
+    const { card } = await getNextCard(deckId);
+    await answerCard(card!.id, "good");
+
+    const cardsBefore = await Card.find({}).sort({ _id: 1 }).lean();
+    const logsBefore = await ReviewLog.find({}).lean();
+
+    for (let run = 0; run < 5; run++) await listPracticeCards(deckId);
+
+    // Whole documents, `updatedAt` included: not even a no-op save went through.
+    assert.deepEqual(await Card.find({}).sort({ _id: 1 }).lean(), cardsBefore);
+    assert.deepEqual(await ReviewLog.find({}).lean(), logsBefore);
+    assert.equal((await getNextCard(deckId)).reviewedToday, 1, "only the real answer counts");
+  });
+
+  it("hands over both sides of each card", async () => {
+    const deckId = await seedDeck(1);
+    const [only] = await Card.find({});
+
+    assert.deepEqual(await listPracticeCards(deckId), [
+      { id: String(only._id), front: "front 1", back: "back 1" },
+    ]);
+  });
+
+  it("stays inside the deck it was asked for", async () => {
+    const deckId = await seedDeck(2);
+    const other = await Deck.create({ name: "Other deck" });
+    await Card.create({ deckId: other._id, front: "elsewhere", back: "elsewhere" });
+
+    const practice = await listPracticeCards(deckId);
+    assert.equal(practice.length, 2);
+    assert.ok(practice.every((card) => card.front.startsWith("front")));
+  });
+
+  it("comes back in a different order from one run to the next", async () => {
+    const deckId = await seedDeck(12);
+
+    const orders = new Set<string>();
+    for (let run = 0; run < 20; run++) {
+      const practice = await listPracticeCards(deckId);
+      orders.add(practice.map((card) => card.front).join("|"));
+    }
+    assert.ok(orders.size > 1, "twenty runs all came out in the same order");
+  });
+
+  it("is empty for an empty deck and for an id that is not a deck", async () => {
+    assert.deepEqual(await listPracticeCards(await seedDeck(0)), []);
+    assert.deepEqual(await listPracticeCards("not-an-object-id"), []);
   });
 });
 

@@ -79,6 +79,7 @@ src/app/
   page.tsx            deck list
   decks/[id]/         deck detail: import, settings, cards
   decks/[id]/review/  the review session
+  decks/[id]/practice/  ungraded practice, outside the scheduler
 ```
 
 The scheduler is a pure `(card, button) -> card` function with `now` and the
@@ -122,6 +123,22 @@ atomic, since transactions would need a replica set and that rules out a
 standalone test server. The history row is written **first** on purpose: if it
 fails the card is untouched and the answer simply does not count, whereas the
 other order would move the card with no way to undo it.
+
+## Practice
+
+**Practice** on a deck runs through every card in it, shuffled, whether or not
+anything is due. There are no grade buttons: flip, look, move on. Use it when
+nothing is scheduled and you want to go through the words anyway.
+
+It sits outside the scheduler on purpose. The page reads each card's two sides
+and nothing else, and the screen imports no Server Action, so there is nothing
+it could call to move a due date, change an ease or add a history row. A
+practice run does not count towards "answered today" either. Review decides when
+you see a card next; practice has no say in it.
+
+Keyboard: **space** reveals the answer and then moves on, **left / right
+arrow** step back and forward. At the end, **Shuffle and go again** deals the
+deck in a new order.
 
 ## HTTP API
 

@@ -78,18 +78,29 @@ function DeckRow({ deck }: { deck: DeckSummary }) {
           </p>
         </div>
 
-        {dueTotal > 0 ? (
-          <Link
-            href={`/decks/${deck.id}/review`}
-            className="shrink-0 rounded-md bg-ink px-4 py-2 text-sm font-medium text-surface"
-          >
-            Review {dueTotal}
-          </Link>
-        ) : (
-          <span className="shrink-0 rounded-md border border-border-subtle px-4 py-2 text-sm text-ink-muted">
-            Nothing due
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* On offer whether or not anything is due: practice is not graded. */}
+          {deck.totalCards > 0 && (
+            <Link
+              href={`/decks/${deck.id}/practice`}
+              className="rounded-md border border-border-subtle px-4 py-2 text-sm font-medium"
+            >
+              Practice
+            </Link>
+          )}
+          {dueTotal > 0 ? (
+            <Link
+              href={`/decks/${deck.id}/review`}
+              className="rounded-md bg-ink px-4 py-2 text-sm font-medium text-surface"
+            >
+              Review {dueTotal}
+            </Link>
+          ) : (
+            <span className="rounded-md border border-border-subtle px-4 py-2 text-sm text-ink-muted">
+              Nothing due
+            </span>
+          )}
+        </div>
       </div>
     </li>
   );

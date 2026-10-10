@@ -2,6 +2,7 @@ import mongoose, { type Types } from "mongoose";
 
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
+import { shuffled } from "@/lib/shuffle";
 import { describeState, formatDelay, previewIntervals } from "@/lib/srs/scheduler";
 import type { CardState, Grade, ReviewState, SchedulerConfig } from "@/lib/srs/types";
 
@@ -52,6 +53,13 @@ export interface ReviewCardView {
   stateLabel: string;
   /** Button labels: what each grade would do to this card. */
   previews: Record<Grade, string>;
+}
+
+/** A card as the practice screen sees it: the two sides and nothing else. */
+export interface PracticeCard {
+  id: string;
+  front: string;
+  back: string;
 }
 
 export interface QueueCounts {
@@ -185,6 +193,30 @@ export async function listCards(deckId: string, limit = 200): Promise<CardSummar
     lapses: card.lapses,
     reps: card.reps,
   }));
+}
+
+/**
+ * Every card in a deck, shuffled, for a practice run.
+ *
+ * Practice sits outside the scheduler. Whether a card is due has no bearing on
+ * it, so the whole deck is on offer, and this reads the two sides of each card
+ * and nothing more -- there is no write here to move a due date or add a
+ * history row, however many times a card gets flipped.
+ */
+export async function listPracticeCards(deckId: string): Promise<PracticeCard[]> {
+  const id = toObjectId(deckId);
+  if (!id) return [];
+
+  await connectToDatabase();
+  const cards = await Card.find({ deckId: id }).select({ front: 1, back: 1 }).lean();
+
+  return shuffled(
+    cards.map((card) => ({
+      id: String(card._id),
+      front: card.front,
+      back: card.back,
+    })),
+  );
 }
 
 /** Deck settings translated into scheduler config overrides. */
