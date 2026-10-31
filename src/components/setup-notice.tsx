@@ -7,15 +7,15 @@ export function SetupNotice({ error }: { error: unknown }) {
   const message = error instanceof Error ? error.message : String(error);
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-2xl space-y-5 rounded-3xl bg-surface-raised p-5 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Connect a database</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight">Connect a database</h1>
         <p className="mt-1 text-sm text-ink-muted">
           The app could not reach MongoDB.
         </p>
       </div>
 
-      <pre className="overflow-x-auto rounded-lg border border-again/40 bg-surface-raised p-3 text-xs text-again">
+      <pre className="overflow-x-auto rounded-2xl border border-again/40 bg-again/10 p-3 text-xs whitespace-pre-wrap text-again">
         {message}
       </pre>
 

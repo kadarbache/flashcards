@@ -4,6 +4,7 @@ import { useActionState, useRef, useState } from "react";
 
 import { importCards, type FormState } from "@/app/actions";
 import { SEPARATORS, type SeparatorName } from "@/lib/import";
+import { field, primaryButton } from "@/components/ui";
 
 const initialState: FormState = { ok: false, message: "" };
 
@@ -37,16 +38,16 @@ export function ImportForm({ deckId }: { deckId: string }) {
         rows={6}
         spellCheck={false}
         placeholder={PLACEHOLDER}
-        className="w-full rounded-md border border-border-subtle bg-surface-raised px-3 py-2 font-mono text-xs outline-none focus:border-easy"
+        className={`${field} font-mono text-sm`}
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-xs text-ink-muted">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink-muted">
           Separator
           <select
             value={separator}
             onChange={(event) => setSeparator(event.target.value as SeparatorName)}
-            className="rounded-md border border-border-subtle bg-surface-raised px-2 py-1 text-xs"
+            className="rounded-xl border border-border-subtle bg-surface-high px-3 py-2 text-sm text-ink"
           >
             {Object.keys(SEPARATORS).map((name) => (
               <option key={name} value={name}>
@@ -56,8 +57,8 @@ export function ImportForm({ deckId }: { deckId: string }) {
           </select>
         </label>
 
-        <label className="cursor-pointer text-xs text-ink-muted underline-offset-4 hover:underline">
-          or load a file
+        <label className="cursor-pointer rounded-full bg-surface-high px-4 py-2 text-sm font-bold text-ink transition hover:bg-border-subtle">
+          Load a file
           <input
             type="file"
             accept=".csv,.tsv,.txt"
@@ -69,7 +70,7 @@ export function ImportForm({ deckId }: { deckId: string }) {
         <button
           type="submit"
           disabled={isPending}
-          className="ml-auto rounded-md bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
+          className={`${primaryButton} ml-auto`}
         >
           {isPending ? "Importing..." : "Import"}
         </button>
@@ -82,8 +83,8 @@ export function ImportForm({ deckId }: { deckId: string }) {
 
       {state.message !== "" && (
         <div
-          className={`rounded-md border px-3 py-2 text-sm ${
-            state.ok ? "border-good/40 text-good" : "border-again/40 text-again"
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            state.ok ? "border-good/40 bg-good/10 text-good" : "border-again/40 bg-again/10 text-again"
           }`}
           role="status"
         >

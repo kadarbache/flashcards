@@ -3,11 +3,10 @@
 import { useActionState, useEffect, useRef } from "react";
 
 import { createCard, type FormState } from "@/app/actions";
+import { field, label, primaryButton } from "@/components/ui";
 
 const initialState: FormState = { ok: false, message: "" };
 
-const field =
-  "w-full rounded-md border border-border-subtle bg-surface-raised px-3 py-2 text-sm outline-none focus:border-easy";
 
 /** Add one card at a time: a question and an answer, nothing else to think about. */
 export function CardForm({ deckId }: { deckId: string }) {
@@ -29,7 +28,7 @@ export function CardForm({ deckId }: { deckId: string }) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">Question</span>
+          <span className={label}>Question</span>
           <textarea
             ref={firstField}
             name="front"
@@ -40,7 +39,7 @@ export function CardForm({ deckId }: { deckId: string }) {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">Answer</span>
+          <span className={label}>Answer</span>
           <textarea name="back" rows={3} required placeholder="hello" className={field} />
         </label>
       </div>
@@ -49,7 +48,7 @@ export function CardForm({ deckId }: { deckId: string }) {
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
+          className={primaryButton}
         >
           {isPending ? "Adding..." : "Add card"}
         </button>

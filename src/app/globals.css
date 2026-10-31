@@ -1,52 +1,140 @@
 @import "tailwindcss";
 
 /*
- * Tokens. `@theme` has to sit at the top level for Tailwind to build utilities
- * (`bg-surface`, `text-ink`, ...) from it, so dark mode overrides the same
- * custom properties on `:root` further down rather than nesting a second
- * `@theme` block inside a media query.
+ * Tokens. The app has one look, a dark "arcade" theme, so there is no light
+ * variant to switch to: the game colours are designed against this ground.
+ * `@theme` builds the utilities (`bg-surface-raised`, `text-gold`, ...).
  */
 @theme {
-  /*
-   * Google Sans, loaded and self-hosted by `next/font` in the root layout.
-   * Overriding `--font-sans` also moves Tailwind's default body font, so every
-   * element picks it up without a `font-sans` on each one.
-   */
-  --font-sans: var(--font-google-sans), ui-sans-serif, system-ui, -apple-system,
+  /* Bricolage Grotesque, self-hosted by `next/font` in the root layout. */
+  --font-sans: var(--font-display), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
 
-  --color-surface: oklch(99% 0.002 250);
-  --color-surface-raised: oklch(100% 0 0);
-  --color-border-subtle: oklch(90% 0.006 250);
-  --color-ink: oklch(24% 0.02 260);
-  --color-ink-muted: oklch(52% 0.015 260);
+  --color-ground: #0f0d1a;
+  --color-surface: #0f0d1a;
+  --color-surface-raised: #1b1830;
+  --color-surface-high: #252140;
+  --color-border-subtle: #2f2a4a;
+  --color-ink: #f5f2ff;
+  --color-ink-muted: #a7a1c2;
 
-  /* One colour per grading button, reused by the buttons and the legend. */
-  --color-again: oklch(55% 0.19 22);
-  --color-hard: oklch(58% 0.14 62);
-  --color-good: oklch(52% 0.14 152);
-  --color-easy: oklch(55% 0.16 250);
-}
+  /* The flashcard itself: light paper on the dark ground. */
+  --color-paper: #fbf8ff;
+  --color-paper-ink: #16122b;
+  --color-paper-muted: #5d5878;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-surface: oklch(19% 0.012 260);
-    --color-surface-raised: oklch(24% 0.014 260);
-    --color-border-subtle: oklch(33% 0.015 260);
-    --color-ink: oklch(95% 0.005 260);
-    --color-ink-muted: oklch(70% 0.014 260);
+  --color-gold: #ffd24a;
+  --color-flame: #ff8a3d;
 
-    --color-again: oklch(62% 0.18 22);
-    --color-hard: oklch(66% 0.14 62);
-    --color-good: oklch(60% 0.13 152);
-    --color-easy: oklch(62% 0.15 250);
-  }
+  /* One colour per grade, for the dark ground. */
+  --color-again: #ff6b81;
+  --color-hard: #ffb547;
+  --color-good: #3ee0a1;
+  --color-easy: #6ea8ff;
+
+  /* The same four, dark enough for the big stamps on a paper card. */
+  --color-again-deep: #d42f4f;
+  --color-hard-deep: #a86300;
+  --color-good-deep: #0b8a5a;
+  --color-easy-deep: #2463d6;
 }
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    background-color: var(--color-surface);
+    background-color: var(--color-ground);
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-gold);
+    outline-offset: 3px;
+  }
+}
+
+/* --- motion ---------------------------------------------------------------- */
+
+@keyframes float-up {
+  0% { transform: translateY(12px) scale(0.7); opacity: 0; }
+  15% { transform: translateY(0) scale(1.12); opacity: 1; }
+  100% { transform: translateY(-90px) scale(1); opacity: 0; }
+}
+.anim-float-up { animation: float-up 1000ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
+
+@keyframes pop-in {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.anim-pop-in { animation: pop-in 480ms cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+
+@keyframes card-in {
+  from { transform: translateY(14px) scale(0.95); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+.anim-card-in { animation: card-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+
+@keyframes slide-in-left {
+  from { transform: translateX(-45%) rotate(-6deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.anim-slide-in-left { animation: slide-in-left 300ms cubic-bezier(0.2, 0.9, 0.3, 1.05) both; }
+
+@keyframes pulse-once {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.anim-pulse { animation: pulse-once 380ms cubic-bezier(0.2, 1.6, 0.4, 1); }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+.anim-shake { animation: shake 400ms ease; }
+
+@keyframes rise {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.anim-rise { animation: rise 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  30% { transform: scale(1.06, 0.96) rotate(-2deg); }
+  60% { transform: scale(0.97, 1.05) rotate(2deg); }
+}
+.anim-flicker { animation: flicker 1.8s ease-in-out infinite; transform-origin: 50% 90%; }
+
+/* Confetti pieces read their flight from --dx, --dy and --rot. */
+@keyframes confetti {
+  from { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.7); opacity: 0; }
+}
+.confetti-piece { animation: confetti 900ms cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-float-up,
+  .anim-pop-in,
+  .anim-card-in,
+  .anim-slide-in-left,
+  .anim-pulse,
+  .anim-shake,
+  .anim-rise,
+  .anim-flicker,
+  .confetti-piece {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

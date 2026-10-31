@@ -4,11 +4,10 @@ import { useActionState } from "react";
 
 import { updateDeckSettings, type FormState } from "@/app/actions";
 import type { DeckSettings } from "@/lib/decks";
+import { field, label, primaryButton } from "@/components/ui";
 
 const initialState: FormState = { ok: false, message: "" };
 
-const field =
-  "w-full rounded-md border border-border-subtle bg-surface-raised px-3 py-2 text-sm outline-none focus:border-easy";
 
 export function SettingsForm({ deck }: { deck: DeckSettings }) {
   const [state, formAction, isPending] = useActionState(
@@ -21,12 +20,12 @@ export function SettingsForm({ deck }: { deck: DeckSettings }) {
       <input type="hidden" name="deckId" value={deck.id} />
 
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-ink-muted">Name</span>
+        <span className={label}>Name</span>
         <input name="name" defaultValue={deck.name} maxLength={120} className={field} />
       </label>
 
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-ink-muted">Description</span>
+        <span className={label}>Description</span>
         <input
           name="description"
           defaultValue={deck.description}
@@ -37,7 +36,7 @@ export function SettingsForm({ deck }: { deck: DeckSettings }) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">
+          <span className={label}>
             Learning steps (minutes)
           </span>
           <input
@@ -47,7 +46,7 @@ export function SettingsForm({ deck }: { deck: DeckSettings }) {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">
+          <span className={label}>
             Relearning steps (minutes)
           </span>
           <input
@@ -68,7 +67,7 @@ export function SettingsForm({ deck }: { deck: DeckSettings }) {
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
+          className={primaryButton}
         >
           {isPending ? "Saving..." : "Save settings"}
         </button>

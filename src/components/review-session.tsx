@@ -1,94 +1,158 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { deleteCardAndContinue, gradeCard, refreshQueue, undoLastGrade } from "@/app/actions";
+import { Confetti, Floats, buzz, type FloatText } from "@/components/game/effects";
+import { ARROW_KEYS, MOVES, moveFor, type GradeMove } from "@/components/game/grades";
+import { GoalRing, LevelBar, MultiplierPill, StreakPill } from "@/components/game/hud";
+import { ReviewCard } from "@/components/game/review-card";
+import type { Direction, SwipeFrame } from "@/components/game/use-swipe";
 import {
-  deleteCardAndContinue,
-  gradeCard,
-  refreshQueue,
-  undoLastGrade,
-} from "@/app/actions";
-import { Arrow, Flashcard, GhostButton } from "@/components/flashcard";
+  ArrowIcon,
+  BoltIcon,
+  FlameIcon,
+  HomeIcon,
+  SkipIcon,
+  SwapIcon,
+  TrophyIcon,
+  UndoIcon,
+} from "@/components/icons";
+import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
+import { COMBO_PAUSE_MS, multiplierFor, nextCombo, xpFor } from "@/lib/game";
 import type { NextCardResult } from "@/lib/decks";
-import type { Grade } from "@/lib/srs/types";
+import type { PlayerStats, SessionResult } from "@/lib/stats";
+
+/** How long the card takes to fly off; the next one waits for it. */
+const FLY_MS = 240;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+interface SessionTally {
+  answered: number;
+  xp: number;
+  bestCombo: number;
+}
+
+interface Toast {
+  id: number;
+  title: string;
+  detail: string;
+}
 
 /**
- * Button colour and keyboard digit for each grade, in display order.
+ * A review round played as a game.
  *
- * The tones are written out in full rather than built from the grade name --
- * Tailwind scans source text for complete class names, so `text-${grade}` would
- * compile to nothing.
+ * Grading is exactly what it was: each swipe is one `gradeCard` call with the
+ * grade it stands for, so the schedule cannot tell a swipe from a button. The
+ * game parts (XP, combo, confetti) ride on top and never change when a card
+ * comes back. Every answer earns the same XP whatever the grade, so being
+ * honest with "Again" costs nothing.
  */
-const BUTTONS: Array<{ grade: Grade; label: string; tone: string; key: string }> = [
-  {
-    grade: "again",
-    label: "Again",
-    tone: "text-again border-again/40 bg-again/10 hover:bg-again/20",
-    key: "1",
-  },
-  {
-    grade: "hard",
-    label: "Hard",
-    tone: "text-hard border-hard/40 bg-hard/10 hover:bg-hard/20",
-    key: "2",
-  },
-  {
-    grade: "good",
-    label: "Good",
-    tone: "text-good border-good/40 bg-good/10 hover:bg-good/20",
-    key: "3",
-  },
-  {
-    grade: "easy",
-    label: "Easy",
-    tone: "text-easy border-easy/40 bg-easy/10 hover:bg-easy/20",
-    key: "4",
-  },
-];
-
 export function ReviewSession({
   deckId,
   deckName,
   initial,
+  initialPlayer,
+  canBlitz,
 }: {
   deckId: string;
   deckName: string;
   initial: NextCardResult;
+  initialPlayer: PlayerStats;
+  canBlitz: boolean;
 }) {
   const [queue, setQueue] = useState(initial);
+  const [player, setPlayer] = useState(initialPlayer);
   const [flipped, setFlipped] = useState(false);
+  const [leaving, setLeaving] = useState<Direction | null>(null);
+  /** Bumped for every new card, so the same card coming back still remounts. */
+  const [turn, setTurn] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   /** Cards put aside for this session only; the server filters them out. */
   const [skipped, setSkipped] = useState<string[]>([]);
+  const [aim, setAim] = useState<Direction | null>(null);
+  const [combo, setCombo] = useState(0);
+  const [tally, setTally] = useState<SessionTally>({ answered: 0, xp: 0, bestCombo: 0 });
+  const [floats, setFloats] = useState<FloatText[]>([]);
+  const [confetti, setConfetti] = useState(0);
+  const [toast, setToast] = useState<Toast | null>(null);
+
   /** When the current card went on screen, for the answer-time log. */
   const shownAt = useRef<number | null>(null);
+  const lastAnswerAt = useRef<number | null>(null);
+  const comboTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** XP of each answer this session, newest last, so undo can take it back. */
+  const earned = useRef<number[]>([]);
+  const aimRef = useRef<Direction | null>(null);
+  const backdrops = useRef<Partial<Record<Direction, HTMLDivElement | null>>>({});
+  const nextId = useRef(1);
 
-  const { card, counts, reviewedToday } = queue;
+  const { card, counts } = queue;
   const remaining = counts.newCards + counts.learning + counts.review;
 
-  const apply = useCallback((next: NextCardResult) => {
-    setQueue(next);
-    setFlipped(false);
-    setMenuOpen(false);
-  }, []);
-
-  // Restart the answer-time clock whenever a different card goes up.
   useEffect(() => {
     shownAt.current = Date.now();
-  }, [card?.id]);
+  }, [card?.id, turn]);
 
-  /** Wraps every server round trip: one in flight at a time, errors surfaced. */
+  useEffect(
+    () => () => {
+      if (comboTimer.current) clearTimeout(comboTimer.current);
+    },
+    [],
+  );
+
+  const paintBackdrop = useCallback((direction: Direction | null, progress: number) => {
+    for (const move of MOVES) {
+      const layer = backdrops.current[move.direction];
+      if (layer) layer.style.opacity = move.direction === direction ? String(progress) : "0";
+    }
+  }, []);
+
+  const onFrame = useCallback(
+    (frame: SwipeFrame) => {
+      paintBackdrop(frame.direction, frame.progress);
+      const next = frame.progress > 0 ? frame.direction : null;
+      if (next !== aimRef.current) {
+        aimRef.current = next;
+        setAim(next);
+      }
+    },
+    [paintBackdrop],
+  );
+
+  const float = useCallback((text: string, color: string, top: number, size: number) => {
+    const id = nextId.current++;
+    setFloats((items) => [...items, { id, text, color, top, size }]);
+    setTimeout(() => setFloats((items) => items.filter((item) => item.id !== id)), 1050);
+  }, []);
+
+  const showToast = useCallback((title: string, detail: string) => {
+    const id = nextId.current++;
+    setToast({ id, title, detail });
+    setTimeout(() => setToast((current) => (current?.id === id ? null : current)), 2600);
+  }, []);
+
+  /** Put a fresh result on screen: new card face down, colours cleared. */
+  const apply = useCallback(
+    (next: SessionResult) => {
+      setQueue(next);
+      setPlayer(next.player);
+      setFlipped(false);
+      setLeaving(null);
+      setTurn((value) => value + 1);
+      aimRef.current = null;
+      setAim(null);
+      paintBackdrop(null, 0);
+    },
+    [paintBackdrop],
+  );
+
+  /** Every server round trip except grading: one at a time, errors shown. */
   const run = useCallback(
-    async (work: () => Promise<NextCardResult>) => {
+    async (work: () => Promise<SessionResult>) => {
       if (pending) return;
       setPending(true);
       setError(null);
@@ -103,318 +167,625 @@ export function ReviewSession({
     [apply, pending],
   );
 
-  const grade = useCallback(
-    (value: Grade) => {
-      if (!card) return;
-      const elapsedMs = shownAt.current === null ? null : Date.now() - shownAt.current;
-      return run(() => gradeCard(card.id, value, elapsedMs, { exclude: skipped }));
+  const answer = useCallback(
+    async (move: GradeMove) => {
+      if (!card || pending || !flipped) return;
+      const now = Date.now();
+      const nowCombo = nextCombo(combo, lastAnswerAt.current, now);
+      const gained = xpFor(nowCombo);
+      const elapsedMs = shownAt.current === null ? null : now - shownAt.current;
+
+      setPending(true);
+      setError(null);
+      setLeaving(move.direction);
+      aimRef.current = move.direction;
+      setAim(move.direction);
+      paintBackdrop(move.direction, 1);
+      buzz(12);
+      float(`+${gained} XP`, "#FFD24A", 120, 30);
+      if (nowCombo >= 3) float(`${nowCombo} in a row`, "#FF8A3D", 170, 19);
+
+      try {
+        const [result] = await Promise.all([
+          gradeCard(card.id, move.grade, elapsedMs, { exclude: skipped }, nowCombo),
+          sleep(FLY_MS),
+        ]);
+
+        lastAnswerAt.current = now;
+        earned.current.push(gained);
+        setCombo(nowCombo);
+        if (comboTimer.current) clearTimeout(comboTimer.current);
+        // A long pause ends the run of answers; show that as it happens.
+        comboTimer.current = setTimeout(() => setCombo(0), COMBO_PAUSE_MS);
+        setTally((current) => ({
+          answered: current.answered + 1,
+          xp: current.xp + gained,
+          bestCombo: Math.max(current.bestCombo, nowCombo),
+        }));
+
+        if (result.player.level > player.level) {
+          setConfetti((value) => value + 1);
+          buzz(40);
+          showToast(`Level ${result.player.level}!`, `You are now a ${result.player.rank}.`);
+        } else if (result.player.todayDone && !player.todayDone) {
+          setConfetti((value) => value + 1);
+          buzz(40);
+          showToast(
+            "Daily goal done!",
+            `${result.player.streak} ${result.player.streak === 1 ? "day" : "days"} in a row.`,
+          );
+        } else if (nowCombo % 10 === 0) {
+          setConfetti((value) => value + 1);
+          showToast(`${nowCombo} in a row!`, "Keep the run going.");
+        }
+
+        apply(result);
+      } catch (cause) {
+        setLeaving(null);
+        paintBackdrop(null, 0);
+        setError(cause instanceof Error ? cause.message : "Something went wrong.");
+      } finally {
+        setPending(false);
+      }
     },
-    [card, run, skipped],
+    [apply, card, combo, flipped, float, paintBackdrop, pending, player, showToast, skipped],
   );
 
-  const undo = useCallback(
-    () => run(() => undoLastGrade(deckId, { exclude: skipped })),
-    [deckId, run, skipped],
-  );
+  const onSwipe = useCallback((direction: Direction) => void answer(moveFor(direction)), [answer]);
+
+  const undo = useCallback(() => {
+    void run(async () => {
+      const result = await undoLastGrade(deckId, { exclude: skipped });
+      const taken = earned.current.pop();
+      if (taken !== undefined) {
+        setTally((current) => ({ ...current, answered: current.answered - 1, xp: current.xp - taken }));
+      }
+      setCombo((value) => Math.max(0, value - 1));
+      return result;
+    });
+  }, [deckId, run, skipped]);
 
   const skip = useCallback(() => {
     if (!card) return;
     const next = [...skipped, card.id];
     setSkipped(next);
-    return run(() => refreshQueue(deckId, { exclude: next }));
+    void run(() => refreshQueue(deckId, { exclude: next }));
   }, [card, deckId, run, skipped]);
+
+  const refresh = useCallback(() => {
+    void run(() => refreshQueue(deckId, { exclude: skipped }));
+  }, [deckId, run, skipped]);
 
   const unskip = useCallback(() => {
     setSkipped([]);
-    return run(() => refreshQueue(deckId, { exclude: [] }));
+    void run(() => refreshQueue(deckId, { exclude: [] }));
   }, [deckId, run]);
 
   const removeCard = useCallback(() => {
     if (!card) return;
-    return run(() => deleteCardAndContinue(card.id, deckId, { exclude: skipped }));
+    if (!window.confirm("Delete this card for good? Its history goes with it.")) return;
+    void run(() => deleteCardAndContinue(card.id, deckId, { exclude: skipped }));
   }, [card, deckId, run, skipped]);
 
-  // Space flips the card; 1-4 grade it once it is face up; arrows move around.
+  // Space or Enter flips. Once face up, the arrows answer the way a swipe
+  // would (left Again, down Hard, right Good, up Easy), and so do 1-4.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        void undo();
-        return;
-      }
-      if (event.key === "ArrowRight" && card) {
-        event.preventDefault();
-        void skip();
-        return;
-      }
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
       if (!card) return;
 
-      if (event.key === " " || event.key === "Enter") {
+      const key = event.key.toLowerCase();
+      if (key === "u") {
         event.preventDefault();
-        setFlipped((was) => !was);
+        if (queue.reviewedToday > 0) undo();
+        return;
+      }
+      if (key === "s") {
+        event.preventDefault();
+        skip();
+        return;
+      }
+      if (event.key === " " || event.key === "Enter") {
+        // Let a focused button or link handle its own key.
+        if (target?.closest("button, a")) return;
+        event.preventDefault();
+        if (!pending && leaving === null) setFlipped((was) => !was);
         return;
       }
 
-      if (flipped) {
-        const button = BUTTONS.find((entry) => entry.key === event.key);
-        if (button) {
-          event.preventDefault();
-          void grade(button.grade);
-        }
+      const direction = ARROW_KEYS[event.key];
+      const move = direction ? moveFor(direction) : MOVES.find((entry) => entry.key === event.key);
+      if (move) {
+        event.preventDefault();
+        if (flipped) void answer(move);
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [card, flipped, grade, skip, undo]);
+  }, [answer, card, flipped, leaving, pending, queue.reviewedToday, skip, undo]);
 
-  if (!card) {
-    return (
-      <QueueEmpty
-        deckId={deckId}
-        deckName={deckName}
-        queue={queue}
-        skippedCount={skipped.length}
-        onRefresh={apply}
-        onUnskip={unskip}
-        onUndo={undo}
-        canUndo={reviewedToday > 0}
-      />
-    );
-  }
+  const progress = tally.answered / Math.max(1, tally.answered + remaining);
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-6">
-      <Flashcard
-        front={card.front}
-        back={card.back}
-        flipped={flipped}
-        onFlip={setFlipped}
-        dimmed={pending}
-        label={card.stateLabel}
-        position={reviewedToday + 1}
-        total={reviewedToday + remaining}
-        menuOpen={menuOpen}
-        onMenuToggle={() => setMenuOpen((was) => !was)}
-        onDelete={removeCard}
-        deckId={deckId}
-        deckName={deckName}
-      />
+    <div className="relative">
+      {/* The whole screen takes on the colour of the answer you lean toward. */}
+      {MOVES.map((move) => (
+        <div
+          key={move.direction}
+          ref={(element) => {
+            backdrops.current[move.direction] = element;
+          }}
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 -z-10 opacity-0 transition-opacity duration-300"
+          style={{
+            background: `radial-gradient(110% 70% at 50% 42%, ${move.color}55, ${move.color}12 55%, transparent 80%)`,
+          }}
+        />
+      ))}
 
-      {/*
-       * Four equal columns rather than a flex row of pills. A grid track can
-       * shrink below its content, so the row cannot force the page sideways at
-       * any width -- the old row had a 432px floor (two 56px circles, four
-       * 68px pills, six gaps) against a ~343px phone, which is what pushed the
-       * buttons off screen. Undo and skip moved out of this line for the same
-       * reason: they are not answers, so they do not belong in the answer row.
-       */}
-      <div className="w-full space-y-3">
-        {flipped ? (
-          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-            {BUTTONS.map((button) => (
-              <button
-                key={button.grade}
-                type="button"
-                onClick={() => void grade(button.grade)}
+      <Confetti fire={confetti} />
+
+      {!card ? (
+        <RoundClear
+          deckId={deckId}
+          deckName={deckName}
+          queue={queue}
+          player={player}
+          tally={tally}
+          skippedCount={skipped.length}
+          canBlitz={canBlitz}
+          busy={pending}
+          onRefresh={refresh}
+          onUnskip={unskip}
+          onUndo={undo}
+        />
+      ) : (
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
+          <section className="mx-auto flex w-full max-w-md flex-col gap-4 lg:max-w-lg">
+            <div className="flex items-center gap-2.5">
+              <Link href="/" className={iconButton} aria-label="Back to home">
+                <ArrowIcon direction="left" className="h-5 w-5" />
+              </Link>
+              <StreakPill streak={player.streak} lit={player.todayDone} />
+              <LevelBar level={player.level} into={player.levelInto} needed={player.levelNeeded} />
+              <MultiplierPill multiplier={multiplierFor(combo + 1)} pulseKey={combo} />
+            </div>
+
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-surface-raised"
+              role="progressbar"
+              aria-label="Round progress"
+              aria-valuemin={0}
+              aria-valuemax={tally.answered + remaining}
+              aria-valuenow={tally.answered}
+            >
+              <div
+                className="h-full rounded-full bg-good transition-[width] duration-500"
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+
+            <div className="relative mb-3 h-[clamp(18rem,calc(100dvh-24rem),27rem)]">
+              {/* The rest of the round, stacked behind the card. */}
+              {remaining > 2 && (
+                <div className="absolute inset-0 translate-y-10 scale-[0.9] rounded-[28px] bg-paper/20" />
+              )}
+              {remaining > 1 && (
+                <div className="absolute inset-0 translate-y-5 scale-[0.95] rounded-[28px] bg-paper/45" />
+              )}
+              <ReviewCard
+                key={`${card.id}-${turn}`}
+                card={card}
+                flipped={flipped}
+                onFlip={setFlipped}
+                leaving={leaving}
                 disabled={pending}
-                title={`${button.label} (${button.key})`}
-                className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl border px-1 transition active:scale-[0.97] disabled:opacity-40 ${button.tone}`}
-              >
-                <span className="text-[0.8125rem] leading-none font-semibold">
-                  {button.label}
-                </span>
-                <span className="text-[0.6875rem] leading-none tabular-nums opacity-70">
-                  {card.previews[button.grade]}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setFlipped(true)}
-            disabled={pending}
-            className="flex h-16 w-full items-center justify-center gap-2 rounded-2xl border border-border-subtle bg-surface-raised text-sm font-medium transition active:scale-[0.99] disabled:opacity-40"
-          >
-            Show answer
-            <kbd className="hidden rounded border border-border-subtle px-1.5 py-0.5 text-[0.6875rem] font-normal text-ink-muted sm:inline">
-              space
-            </kbd>
-          </button>
-        )}
+                onFrame={onFrame}
+                onSwipe={onSwipe}
+                position={tally.answered + 1}
+                total={tally.answered + remaining}
+                deckId={deckId}
+                deckName={deckName}
+                onDelete={removeCard}
+              />
 
-        <div className="flex items-center gap-2 text-xs">
-          <GhostButton
-            label="Undo last answer"
-            onClick={() => void undo()}
-            disabled={pending || reviewedToday === 0}
-          >
-            <Arrow direction="left" />
-            Undo
-          </GhostButton>
-
-          <p className="min-w-0 flex-1 text-center text-ink-muted">
-            <span className="text-easy">{counts.newCards} new</span> &middot;{" "}
-            <span className="text-again">{counts.learning} learning</span> &middot;{" "}
-            <span className="text-good">{counts.review} review</span>
-            {counts.scheduled > 0 && <> &middot; {counts.scheduled} scheduled</>}
-            {skipped.length > 0 && (
-              <>
-                {" "}
-                &middot;{" "}
-                <button
-                  type="button"
-                  onClick={() => void unskip()}
-                  className="underline underline-offset-4"
+              <Floats items={floats} />
+              {toast && (
+                <div
+                  key={`toast-${toast.id}`}
+                  role="status"
+                  className="anim-pop-in pointer-events-none absolute inset-x-0 top-5 z-40 mx-auto w-fit max-w-[90%] rounded-2xl bg-gold px-5 py-3 text-center text-paper-ink shadow-[0_12px_30px_-8px_rgba(0,0,0,.6)]"
                 >
-                  {skipped.length} skipped
-                </button>
-              </>
+                  <p className="text-lg leading-tight font-extrabold">{toast.title}</p>
+                  <p className="text-sm font-semibold">{toast.detail}</p>
+                </div>
+              )}
+            </div>
+
+            {flipped ? (
+              <TimeHints previews={card.previews} aim={aim} onAnswer={(move) => void answer(move)} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setFlipped(true)}
+                disabled={pending}
+                className={`${primaryButton} min-h-16 w-full text-lg`}
+              >
+                Show answer
+                <kbd className="hidden rounded-md bg-paper-ink/15 px-1.5 py-0.5 text-xs font-bold sm:inline">
+                  Space
+                </kbd>
+              </button>
             )}
-          </p>
 
-          <GhostButton
-            label="Skip this card for now"
-            onClick={() => void skip()}
-            disabled={pending}
-          >
-            Skip
-            <Arrow direction="right" />
-          </GhostButton>
+            <div className="flex items-center gap-2 text-sm">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={pending || queue.reviewedToday === 0}
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 font-bold text-ink-muted transition hover:bg-surface-raised hover:text-ink disabled:opacity-30"
+                title="Undo last answer (U)"
+              >
+                <UndoIcon className="h-4 w-4" />
+                Undo
+              </button>
+              <p className="min-w-0 flex-1 text-center text-xs text-ink-muted lg:hidden">
+                <CountsLine counts={counts} />
+                {skipped.length > 0 && (
+                  <>
+                    {" · "}
+                    <button type="button" onClick={unskip} className="underline underline-offset-4">
+                      {skipped.length} skipped
+                    </button>
+                  </>
+                )}
+              </p>
+              <span className="hidden flex-1 lg:block" />
+              <button
+                type="button"
+                onClick={skip}
+                disabled={pending}
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 font-bold text-ink-muted transition hover:bg-surface-raised hover:text-ink disabled:opacity-30"
+                title="Skip for now (S)"
+              >
+                Skip
+                <SkipIcon className="h-4 w-4" />
+              </button>
+            </div>
+
+            {error !== null && (
+              <p
+                role="alert"
+                className="rounded-2xl border border-again/40 bg-again/10 px-4 py-3 text-center text-sm text-again"
+              >
+                {error}
+              </p>
+            )}
+          </section>
+
+          <SidePanel
+            player={player}
+            tally={tally}
+            counts={counts}
+            skippedCount={skipped.length}
+            onUnskip={unskip}
+          />
         </div>
-      </div>
-
-      {error !== null && (
-        <p className="rounded-md border border-again/40 px-3 py-2 text-center text-sm text-again">
-          {error}
-        </p>
       )}
     </div>
   );
 }
 
 /**
- * Nothing is due right now. If a learning card is a minute away, count down to
- * it and pull it in when it lands rather than telling the user they are done.
+ * Where each swipe sends the card, shown once it is face up. These are labels,
+ * not buttons: you answer by swiping (or with the keys). The one you are
+ * dragging toward lights up. Screen-reader and keyboard users still get real
+ * buttons, which only show when one of them has focus.
  */
-function QueueEmpty({
+function TimeHints({
+  previews,
+  aim,
+  onAnswer,
+}: {
+  previews: Record<GradeMove["grade"], string>;
+  aim: Direction | null;
+  onAnswer: (move: GradeMove) => void;
+}) {
+  return (
+    <div className="anim-rise">
+      <ul className="grid grid-cols-4 gap-2" aria-label="When each answer brings the card back">
+        {MOVES.map((move) => {
+          const on = aim === move.direction;
+          return (
+            <li
+              key={move.grade}
+              className={`flex min-w-0 flex-col items-center gap-0.5 rounded-2xl py-2.5 transition duration-150 ${
+                on ? "scale-105" : ""
+              }`}
+              style={{
+                background: on ? move.color : "#1B1830",
+                color: on ? "#16122B" : move.color,
+                boxShadow: on ? `0 10px 28px -8px ${move.color}` : undefined,
+              }}
+            >
+              <span className="flex items-center gap-1 text-base leading-none font-extrabold whitespace-nowrap tabular-nums">
+                <ArrowIcon direction={move.direction} className="h-3.5 w-3.5 shrink-0" />
+                {previews[move.grade]}
+              </span>
+              <span className="text-[11px] font-bold opacity-85">{move.label}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <div
+        className="sr-only grid-cols-4 gap-2 focus-within:not-sr-only focus-within:mt-2 focus-within:grid"
+        role="group"
+        aria-label="Answer"
+      >
+        {MOVES.map((move) => (
+          <button
+            key={move.grade}
+            type="button"
+            onClick={() => onAnswer(move)}
+            className="rounded-xl border border-border-subtle bg-surface-raised px-2 py-2 text-sm font-bold"
+          >
+            {move.label}, back in {previews[move.grade]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CountsLine({ counts }: { counts: NextCardResult["counts"] }) {
+  return (
+    <>
+      <b className="text-easy">{counts.newCards}</b> new · <b className="text-again">{counts.learning}</b>{" "}
+      learning · <b className="text-good">{counts.review}</b> review
+    </>
+  );
+}
+
+/** Desktop only: today's goal, this round so far, and the keys. */
+function SidePanel({
+  player,
+  tally,
+  counts,
+  skippedCount,
+  onUnskip,
+}: {
+  player: PlayerStats;
+  tally: SessionTally;
+  counts: NextCardResult["counts"];
+  skippedCount: number;
+  onUnskip: () => void;
+}) {
+  const keys: Array<[string, string]> = [
+    ["Space", "Flip the card"],
+    ["←  1", "Again"],
+    ["↓  2", "Hard"],
+    ["→  3", "Good"],
+    ["↑  4", "Easy"],
+    ["U", "Undo"],
+    ["S", "Skip for now"],
+  ];
+
+  return (
+    <aside className="sticky top-24 hidden flex-col gap-4 lg:flex">
+      <div className={`${panel} flex items-center gap-4`}>
+        <GoalRing value={player.today} goal={player.goal} size={84} stroke={10}>
+          <span className="text-xl leading-none font-extrabold tabular-nums">{player.today}</span>
+          <span className="text-[11px] text-ink-muted">of {player.goal}</span>
+        </GoalRing>
+        <div>
+          <p className="font-extrabold">Today</p>
+          <p className="mt-0.5 flex items-center gap-1 text-sm text-ink-muted">
+            <FlameIcon className="h-4 w-4" lit={player.todayDone} />
+            {player.todayDone
+              ? "Goal done"
+              : `${Math.max(0, player.goal - player.today)} to keep your streak`}
+          </p>
+        </div>
+      </div>
+
+      <div className={`${panel} space-y-3`}>
+        <p className="text-sm font-extrabold">This round</p>
+        <dl className="grid grid-cols-3 gap-2 text-center">
+          <Stat label="Cards" value={tally.answered} />
+          <Stat label="XP" value={tally.xp} />
+          <Stat label="Best run" value={tally.bestCombo} />
+        </dl>
+        <p className="text-center text-xs text-ink-muted">
+          <CountsLine counts={counts} />
+          {skippedCount > 0 && (
+            <>
+              {" · "}
+              <button type="button" onClick={onUnskip} className="underline underline-offset-4">
+                {skippedCount} skipped
+              </button>
+            </>
+          )}
+        </p>
+      </div>
+
+      <div className={`${panel} space-y-2`}>
+        <p className="text-sm font-extrabold">Keys</p>
+        <ul className="space-y-1.5 text-sm">
+          {keys.map(([key, action]) => (
+            <li key={key} className="flex items-center justify-between gap-3">
+              <span className="text-ink-muted">{action}</span>
+              <kbd className="rounded-lg bg-surface-high px-2 py-0.5 font-sans text-xs font-bold whitespace-pre">
+                {key}
+              </kbd>
+            </li>
+          ))}
+        </ul>
+        <Link href="/help" className="block pt-1 text-sm font-bold text-gold hover:underline">
+          How to play
+        </Link>
+      </div>
+    </aside>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl bg-surface-high px-2 py-3">
+      <dd className="text-2xl leading-none font-extrabold tabular-nums">{value}</dd>
+      <dt className="mt-1 text-[11px] font-semibold text-ink-muted">{label}</dt>
+    </div>
+  );
+}
+
+/**
+ * Nothing left to answer. After a round it is a victory screen; with nothing
+ * due from the start it just says so. If a learning card is a minute away,
+ * count down to it and pull it in when it lands.
+ */
+function RoundClear({
   deckId,
   deckName,
   queue,
+  player,
+  tally,
   skippedCount,
+  canBlitz,
+  busy,
   onRefresh,
   onUnskip,
   onUndo,
-  canUndo,
 }: {
   deckId: string;
   deckName: string;
   queue: NextCardResult;
+  player: PlayerStats;
+  tally: SessionTally;
   skippedCount: number;
-  onRefresh: (next: NextCardResult) => void;
+  canBlitz: boolean;
+  busy: boolean;
+  onRefresh: () => void;
   onUnskip: () => void;
   onUndo: () => void;
-  canUndo: boolean;
 }) {
   const { nextDueAtMs, reviewedToday } = queue;
-  const [loading, setLoading] = useState(false);
   const now = useNow();
-
   const remainingMs = nextDueAtMs !== null && now !== null ? nextDueAtMs - now : null;
+  const played = tally.answered > 0;
 
-  const pull = useCallback(async () => {
-    setLoading(true);
-    try {
-      onRefresh(await refreshQueue(deckId));
-    } finally {
-      setLoading(false);
-    }
-  }, [deckId, onRefresh]);
-
-  // Wake up exactly when the soonest card comes due and pull it in. Firing from
-  // the timer rather than from a rendered "is it ready yet" flag keeps this to
-  // one scheduled call instead of one per tick.
+  // Wake up when the soonest card comes due and pull it in. Keyed on the due
+  // time alone, so a refresh that changes nothing does not schedule another.
+  const latestRefresh = useRef(onRefresh);
+  useEffect(() => {
+    latestRefresh.current = onRefresh;
+  });
   useEffect(() => {
     if (nextDueAtMs === null) return;
-    const timer = setTimeout(() => void pull(), Math.max(0, nextDueAtMs - Date.now()));
+    const timer = setTimeout(
+      () => latestRefresh.current(),
+      Math.max(0, nextDueAtMs - Date.now()) + 250,
+    );
     return () => clearTimeout(timer);
-  }, [nextDueAtMs, pull]);
+  }, [nextDueAtMs]);
+
+  const title = skippedCount > 0 ? "Only skipped cards left" : played ? "Round clear!" : "All caught up";
 
   return (
-    <div className="mx-auto max-w-md space-y-5 text-center">
-      <div className="rounded-3xl border border-border-subtle bg-surface-raised px-6 py-14">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {skippedCount > 0 ? "Only skipped cards left" : "Nothing due"}
-        </h1>
-        <p className="mt-2 text-sm text-ink-muted">
-          {reviewedToday > 0
-            ? `${reviewedToday} ${reviewedToday === 1 ? "answer" : "answers"} today.`
-            : "This deck has nothing waiting."}
+    <div className="relative mx-auto max-w-lg space-y-5 text-center">
+      <Confetti fire={played ? 1 : 0} />
+      <div className="anim-pop-in mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] bg-gold text-paper-ink shadow-[0_18px_40px_-12px_rgba(255,210,74,.55)]">
+        <TrophyIcon className="h-12 w-12" />
+      </div>
+      <div className="anim-rise">
+        <h1 className="text-4xl font-extrabold tracking-tight">{title}</h1>
+        <p className="mt-2 text-ink-muted">
+          {played
+            ? `${deckName}: every card due right now is done.`
+            : `Nothing in ${deckName} is due right now.`}
         </p>
         {remainingMs !== null && remainingMs > 0 && (
-          <p className="mt-4 text-sm text-ink-muted">
-            Next card in{" "}
-            <span className="font-semibold text-ink">{countdown(remainingMs)}</span>
+          <p className="mt-2 text-sm text-ink-muted">
+            Next card in <b className="text-ink tabular-nums">{countdown(remainingMs)}</b>
           </p>
         )}
       </div>
 
-      <div className="flex flex-wrap justify-center gap-2">
-        <Link
-          href={`/decks/${deckId}`}
-          className="rounded-full border border-border-subtle px-4 py-2 text-sm"
-        >
-          {deckName}
+      {played && (
+        <dl className="anim-rise grid grid-cols-3 gap-3">
+          <BigStat label="Cards" value={tally.answered} color="text-good" />
+          <BigStat label="XP earned" value={tally.xp} color="text-gold" />
+          <BigStat label="Best run" value={tally.bestCombo} color="text-flame" />
+        </dl>
+      )}
+
+      <div className={`${panel} anim-rise flex items-center gap-4 text-left`}>
+        <GoalRing value={player.today} goal={player.goal} size={72} stroke={9}>
+          <span className="text-lg leading-none font-extrabold tabular-nums">{player.today}</span>
+        </GoalRing>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 font-extrabold">
+            <FlameIcon className="h-5 w-5" lit={player.todayDone} />
+            {player.streak} {player.streak === 1 ? "day" : "days"} in a row
+          </p>
+          <p className="mt-0.5 text-sm text-ink-muted">
+            {player.todayDone
+              ? "Today's goal is done."
+              : `${Math.max(0, player.goal - player.today)} more today keeps the streak.`}
+          </p>
+          <div className="mt-2">
+            <LevelBar level={player.level} into={player.levelInto} needed={player.levelNeeded} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Link href="/" className={`${primaryButton} sm:col-span-2`}>
+          <HomeIcon className="h-5 w-5" />
+          Home
         </Link>
         {/* Nothing is due, which is exactly when a no-stakes run is wanted. */}
-        <Link
-          href={`/decks/${deckId}/practice`}
-          className="rounded-full border border-border-subtle px-4 py-2 text-sm"
-        >
+        <Link href={`/decks/${deckId}/practice`} className={secondaryButton}>
+          <SwapIcon className="h-5 w-5" />
           Practice anyway
         </Link>
+        {canBlitz && (
+          <Link href={`/decks/${deckId}/blitz`} className={secondaryButton}>
+            <BoltIcon className="h-5 w-5 text-gold" />
+            Blitz
+          </Link>
+        )}
         {skippedCount > 0 && (
-          <button
-            type="button"
-            onClick={onUnskip}
-            className="rounded-full border border-border-subtle px-4 py-2 text-sm"
-          >
+          <button type="button" onClick={onUnskip} disabled={busy} className={secondaryButton}>
             Bring back {skippedCount} skipped
           </button>
         )}
-        {canUndo && (
-          <button
-            type="button"
-            onClick={onUndo}
-            className="rounded-full border border-border-subtle px-4 py-2 text-sm"
-          >
+        {reviewedToday > 0 && (
+          <button type="button" onClick={onUndo} disabled={busy} className={secondaryButton}>
+            <UndoIcon className="h-5 w-5" />
             Undo last answer
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => void pull()}
-          disabled={loading}
-          className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
-        >
-          {loading ? "Checking..." : "Check again"}
-        </button>
       </div>
+    </div>
+  );
+}
+
+function BigStat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded-3xl bg-surface-raised px-2 py-4">
+      <dd className={`text-3xl leading-none font-extrabold tabular-nums ${color}`}>{value}</dd>
+      <dt className="mt-1.5 text-xs font-semibold text-ink-muted">{label}</dt>
     </div>
   );
 }
 
 /**
  * The current time, ticking once a second, or null on the server and during
- * hydration -- rendering a clock server-side would only mismatch. Subscribing
- * through `useSyncExternalStore` keeps the ticking out of an effect body.
+ * hydration -- rendering a clock server-side would only mismatch.
  */
 function useNow(intervalMs = 1000): number | null {
-  // Null until subscribed, which matches the server snapshot and keeps the
-  // clock out of the render pass.
   const cached = useRef<number | null>(null);
 
   const subscribe = useCallback(

@@ -3,11 +3,10 @@
 import { useActionState } from "react";
 
 import { signInWithPassword, type LoginState } from "@/app/login/actions";
+import { field, label, primaryButton } from "@/components/ui";
 
 const initialState: LoginState = { error: null };
 
-const field =
-  "w-full rounded-md border border-border-subtle bg-surface-raised px-3 py-2 text-sm outline-none focus:border-easy";
 
 export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
   const [state, formAction, isPending] = useActionState(
@@ -20,7 +19,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       <input type="hidden" name="callbackUrl" value={callbackUrl} />
 
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-ink-muted">Email</span>
+        <span className={label}>Email</span>
         <input
           name="email"
           type="email"
@@ -32,7 +31,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       </label>
 
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-ink-muted">Password</span>
+        <span className={label}>Password</span>
         <input
           name="password"
           type="password"
@@ -43,7 +42,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       </label>
 
       {state.error !== null && (
-        <p className="rounded-md border border-again/40 px-3 py-2 text-sm text-again">
+        <p className="rounded-2xl border border-again/40 bg-again/10 px-4 py-3 text-sm text-again" role="alert">
           {state.error}
         </p>
       )}
@@ -51,7 +50,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       <button
         type="submit"
         disabled={isPending}
-        className="h-11 w-full rounded-md bg-ink text-sm font-medium text-surface transition disabled:opacity-50"
+        className={`${primaryButton} w-full`}
       >
         {isPending ? "Signing in..." : "Sign in"}
       </button>
