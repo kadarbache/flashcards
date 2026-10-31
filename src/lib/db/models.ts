@@ -5,6 +5,7 @@ import type { InferSchemaType, Model } from "mongoose";
 
 const { Schema, model, models } = mongoose;
 
+import { DEFAULT_DAILY_GOAL, MAX_DAILY_GOAL, MIN_DAILY_GOAL, XP_PER_ANSWER } from "@/lib/game";
 import { DEFAULT_CONFIG, GRADES } from "@/lib/srs/types";
 
 /**
@@ -26,6 +27,25 @@ const deckSchema = new Schema(
     relearningStepsMinutes: {
       type: [Number],
       default: () => [...DEFAULT_CONFIG.relearningStepsMinutes],
+    },
+    /** Highest Blitz score on this deck. Blitz never touches scheduling. */
+    blitzBest: { type: Number, default: 0 },
+  },
+  { timestamps: true },
+);
+
+/**
+ * Settings for the one person using the app. A single document, keyed so an
+ * upsert always lands on the same row.
+ */
+const profileSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true, default: "owner" },
+    dailyGoal: {
+      type: Number,
+      default: DEFAULT_DAILY_GOAL,
+      min: MIN_DAILY_GOAL,
+      max: MAX_DAILY_GOAL,
     },
   },
   { timestamps: true },
@@ -89,11 +109,19 @@ const reviewLogSchema = new Schema({
   reviewedAt: { type: Date, default: () => new Date() },
   /** How long the card was on screen, when the client reports it. */
   elapsedMs: { type: Number, default: null },
+  /**
+   * XP this answer earned. Kept on the row so undo takes the XP back with it.
+   * Rows written before XP existed count as the base amount.
+   */
+  xp: { type: Number, default: XP_PER_ANSWER },
 });
 
 reviewLogSchema.index({ deckId: 1, reviewedAt: -1 });
+// Daily counts for the streak, across every deck.
+reviewLogSchema.index({ reviewedAt: -1 });
 
 export type DeckDocument = InferSchemaType<typeof deckSchema>;
+export type ProfileDocument = InferSchemaType<typeof profileSchema>;
 export type CardDocument = InferSchemaType<typeof cardSchema>;
 export type ReviewLogDocument = InferSchemaType<typeof reviewLogSchema>;
 
@@ -126,3 +154,7 @@ dropStaleModel("ReviewLog");
 export const ReviewLog: Model<ReviewLogDocument> =
   (models.ReviewLog as Model<ReviewLogDocument>) ||
   model("ReviewLog", reviewLogSchema);
+
+dropStaleModel("Profile");
+export const Profile: Model<ProfileDocument> =
+  (models.Profile as Model<ProfileDocument>) || model("Profile", profileSchema);

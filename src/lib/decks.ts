@@ -23,6 +23,7 @@ export interface DeckSummary {
   dueLearning: number;
   dueReview: number;
   scheduled: number;
+  blitzBest: number;
 }
 
 export interface DeckSettings {
@@ -31,6 +32,7 @@ export interface DeckSettings {
   description: string;
   learningStepsMinutes: number[];
   relearningStepsMinutes: number[];
+  blitzBest: number;
 }
 
 export interface CardSummary {
@@ -138,6 +140,7 @@ export async function listDecks(): Promise<DeckSummary[]> {
         dueLearning: learning,
         dueReview,
         scheduled,
+        blitzBest: deck.blitzBest ?? 0,
       };
     }),
   );
@@ -157,7 +160,24 @@ export async function getDeck(id: string): Promise<DeckSettings | null> {
     description: deck.description ?? "",
     learningStepsMinutes: deck.learningStepsMinutes,
     relearningStepsMinutes: deck.relearningStepsMinutes,
+    blitzBest: deck.blitzBest ?? 0,
   };
+}
+
+/** Raise a deck's best Blitz score if `score` beats it. Returns the best afterwards. */
+export async function recordBlitzScore(deckIdRaw: string, score: number): Promise<number> {
+  const deckId = toObjectId(deckIdRaw);
+  if (!deckId || !Number.isFinite(score) || score < 0) return 0;
+
+  await connectToDatabase();
+  const points = Math.floor(score);
+  // `$not: { $gte }` also matches decks created before the field existed.
+  await Deck.updateOne(
+    { _id: deckId, blitzBest: { $not: { $gte: points } } },
+    { $set: { blitzBest: points } },
+  );
+  const deck = await Deck.findById(deckId).select({ blitzBest: 1 }).lean();
+  return deck?.blitzBest ?? 0;
 }
 
 export async function listCards(deckId: string, limit = 200): Promise<CardSummary[]> {

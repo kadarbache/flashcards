@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
 import { configFor, toReviewState } from "@/lib/decks";
+import { xpFor } from "@/lib/game";
 import { review } from "@/lib/srs/scheduler";
 import { GRADES, type Grade } from "@/lib/srs/types";
 
@@ -13,12 +14,16 @@ import { GRADES, type Grade } from "@/lib/srs/types";
  * Kept out of the Server Action so it can be tested against a real database
  * without a request context. The action is a thin wrapper that adds cache
  * revalidation on top.
+ *
+ * `combo` is how many answers in a row the session is on, counting this one.
+ * It only sets the XP the answer is worth; the grade alone decides scheduling.
  */
 export async function answerCard(
   cardId: string,
   grade: Grade,
   elapsedMs: number | null = null,
-): Promise<{ deckId: string }> {
+  combo = 1,
+): Promise<{ deckId: string; xp: number }> {
   if (!mongoose.Types.ObjectId.isValid(cardId)) {
     throw new Error("Unknown card.");
   }
@@ -53,6 +58,7 @@ export async function answerCard(
   // means a failed log leaves the card untouched and the answer simply does not
   // count; card first would mutate the card with no way to undo it and no entry
   // against the daily new-card cap.
+  const xp = xpFor(combo);
   const log = await ReviewLog.create({
     cardId: card._id,
     deckId: card.deckId,
@@ -61,6 +67,7 @@ export async function answerCard(
     intervalDaysAfter: after.intervalDays,
     easeAfter: after.ease,
     elapsedMs: elapsedMs !== null && elapsedMs > 0 ? Math.round(elapsedMs) : null,
+    xp,
   });
 
   try {
@@ -71,7 +78,7 @@ export async function answerCard(
     throw error;
   }
 
-  return { deckId: String(card.deckId) };
+  return { deckId: String(card.deckId), xp };
 }
 
 /**

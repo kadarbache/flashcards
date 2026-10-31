@@ -7,11 +7,27 @@ import mongoose from "mongoose";
 import { requireSession } from "@/lib/auth-guard";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
-import { getNextCard, type NextCardResult, type QueueOptions } from "@/lib/decks";
+import {
+  getNextCard,
+  recordBlitzScore,
+  type NextCardResult,
+  type QueueOptions,
+} from "@/lib/decks";
 import { addCardsToDeck } from "@/lib/cards";
 import { parseCards, SEPARATORS, type SeparatorName } from "@/lib/import";
+import { requestTimeZone } from "@/lib/request-time-zone";
 import { answerCard, undoLastAnswer } from "@/lib/review";
 import type { Grade } from "@/lib/srs/types";
+import { getPlayerStats, setDailyGoal, type SessionResult } from "@/lib/stats";
+
+/** The next card plus fresh XP and streak numbers for the HUD. */
+async function withPlayer(next: Promise<NextCardResult>): Promise<SessionResult> {
+  const [queue, player] = await Promise.all([
+    next,
+    requestTimeZone().then((timeZone) => getPlayerStats(timeZone)),
+  ]);
+  return { ...queue, player };
+}
 
 /**
  * Every action starts with `requireSession()`.
@@ -215,20 +231,23 @@ export async function deleteCard(formData: FormData): Promise<void> {
  * Returning the next card keeps the queue on the server: the client never has
  * to work out whether a one-minute learning step has come back around. The
  * scheduling itself lives in `answerCard`, which is testable on its own.
+ *
+ * `combo` is the session's answers-in-a-row count, which sets the XP.
  */
 export async function gradeCard(
   cardId: string,
   grade: Grade,
   elapsedMs: number | null,
   options: QueueOptions = {},
-): Promise<NextCardResult> {
+  combo = 1,
+): Promise<SessionResult> {
   await requireSession();
-  const { deckId } = await answerCard(cardId, grade, elapsedMs);
+  const { deckId } = await answerCard(cardId, grade, elapsedMs, combo);
 
   revalidatePath("/");
   revalidatePath(`/decks/${deckId}`);
 
-  return getNextCard(deckId, options);
+  return withPlayer(getNextCard(deckId, options));
 }
 
 /**
@@ -239,14 +258,14 @@ export async function gradeCard(
 export async function undoLastGrade(
   deckId: string,
   options: QueueOptions = {},
-): Promise<NextCardResult> {
+): Promise<SessionResult> {
   await requireSession();
   const restored = await undoLastAnswer(deckId);
 
   revalidatePath("/");
   revalidatePath(`/decks/${deckId}`);
 
-  return getNextCard(deckId, { ...options, prefer: restored ?? undefined });
+  return withPlayer(getNextCard(deckId, { ...options, prefer: restored ?? undefined }));
 }
 
 /**
@@ -256,9 +275,9 @@ export async function undoLastGrade(
 export async function refreshQueue(
   deckId: string,
   options: QueueOptions = {},
-): Promise<NextCardResult> {
+): Promise<SessionResult> {
   await requireSession();
-  return getNextCard(deckId, options);
+  return withPlayer(getNextCard(deckId, options));
 }
 
 /** Remove the card on screen and carry on with the session. */
@@ -266,9 +285,11 @@ export async function deleteCardAndContinue(
   cardId: string,
   deckId: string,
   options: QueueOptions = {},
-): Promise<NextCardResult> {
+): Promise<SessionResult> {
   await requireSession();
-  if (!mongoose.Types.ObjectId.isValid(cardId)) return getNextCard(deckId, options);
+  if (!mongoose.Types.ObjectId.isValid(cardId)) {
+    return withPlayer(getNextCard(deckId, options));
+  }
 
   await connectToDatabase();
   await Promise.all([
@@ -279,5 +300,22 @@ export async function deleteCardAndContinue(
   revalidatePath("/");
   revalidatePath(`/decks/${deckId}`);
 
-  return getNextCard(deckId, options);
+  return withPlayer(getNextCard(deckId, options));
+}
+
+/** The home screen's goal stepper. Returns the goal as saved, after clamping. */
+export async function updateDailyGoal(goal: number): Promise<number> {
+  await requireSession();
+  const saved = await setDailyGoal(goal);
+  revalidatePath("/");
+  return saved;
+}
+
+/** End of a Blitz round. Returns the deck's best score, which may be this one. */
+export async function saveBlitzScore(deckId: string, score: number): Promise<number> {
+  await requireSession();
+  const best = await recordBlitzScore(deckId, score);
+  revalidatePath("/");
+  revalidatePath(`/decks/${deckId}`);
+  return best;
 }
