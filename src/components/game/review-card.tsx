@@ -8,7 +8,13 @@ import { splitLabel } from "@/lib/blitz";
 import type { ReviewCardView } from "@/lib/decks";
 
 import { MOVES, stateChip } from "./grades";
-import { flingTransform, useSwipe, type Direction, type SwipeFrame } from "./use-swipe";
+import {
+  flingTransform,
+  SWIPE_SURFACE,
+  useSwipe,
+  type Direction,
+  type SwipeFrame,
+} from "./use-swipe";
 
 /** Pixels of drag that count as an answer when you let go. */
 export const SWIPE_THRESHOLD = 110;
@@ -124,7 +130,7 @@ export function ReviewCard({
     <div
       ref={element}
       {...handlers}
-      className="anim-card-in absolute inset-0 cursor-grab touch-none select-none active:cursor-grabbing"
+      className={`anim-card-in absolute inset-0 cursor-grab active:cursor-grabbing ${SWIPE_SURFACE}`}
       role="group"
       aria-roledescription="flashcard"
       aria-label={flipped ? `Answer: ${card.back}` : `Question: ${card.front}`}

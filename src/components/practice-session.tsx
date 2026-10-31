@@ -5,7 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Confetti } from "@/components/game/effects";
 import { play, useArmSound } from "@/components/game/sound";
-import { flingTransform, useSwipe, type Direction, type SwipeFrame } from "@/components/game/use-swipe";
+import {
+  flingTransform,
+  SWIPE_SURFACE,
+  useSwipe,
+  type Direction,
+  type SwipeFrame,
+} from "@/components/game/use-swipe";
 import { ArrowIcon, BoltIcon, FlipIcon, PlayIcon, ShuffleIcon } from "@/components/icons";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
 import { MIN_BLITZ_CARDS, splitLabel } from "@/lib/blitz";
@@ -359,7 +365,7 @@ function SwipeCard({
     <div
       ref={element}
       {...handlers}
-      className={`${enter} absolute inset-0 cursor-grab touch-none select-none active:cursor-grabbing`}
+      className={`${enter} absolute inset-0 cursor-grab active:cursor-grabbing ${SWIPE_SURFACE}`}
       role="group"
       aria-roledescription="flashcard"
       aria-label={flipped ? `Answer: ${card.back}` : `Question: ${card.front}`}

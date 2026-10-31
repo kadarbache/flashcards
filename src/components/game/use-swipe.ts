@@ -14,6 +14,19 @@ export interface SwipeFrame {
   progress: number;
 }
 
+/**
+ * Classes for the element that takes `useSwipe`'s handlers.
+ *
+ * `touch-none` on the card alone is not enough on phones. Browsers work out
+ * what a finger does from the element it lands on up to the nearest scrollable
+ * box, and a card's text area is scrollable (`overflow-y-auto`) so a long
+ * answer fits. A drag starting on the text then belongs to the browser, which
+ * cancels the pointer and the card snaps back. Turning off touch gestures for
+ * everything inside the card keeps every drag ours. Taps and the mouse wheel
+ * still work as normal.
+ */
+export const SWIPE_SURFACE = "touch-none select-none [&_*]:touch-none";
+
 /** Movement under this many pixels is a tap, not a drag. */
 const TAP_SLOP = 8;
 /** Below this the card is "in the middle": no colour, no stamp. */
