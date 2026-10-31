@@ -35,7 +35,11 @@ export const config = {
      *   login     -- the form
      *   _next, favicon -- assets, which would otherwise redirect and leave the
      *                     login page unstyled
+     *   manifest.webmanifest, sw.js, icons, icon, apple-icon, offline --
+     *                     what installing the app needs. Browsers fetch the
+     *                     manifest and icons without cookies, and the offline
+     *                     page is saved before anyone may be signed in.
      */
-    "/((?!api/auth|api/decks|login|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/auth|api/decks|login|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/|icon|apple-icon|offline).*)",
   ],
 };

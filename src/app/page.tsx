@@ -13,6 +13,7 @@ import {
   StarIcon,
   SwapIcon,
 } from "@/components/icons";
+import { InstallCard } from "@/components/pwa";
 import { SetupNotice } from "@/components/setup-notice";
 import { panel } from "@/components/ui";
 import { MIN_BLITZ_CARDS } from "@/lib/blitz";
@@ -134,6 +135,8 @@ export default async function Home() {
           <LevelBar level={player.level} into={player.levelInto} needed={player.levelNeeded} />
         </section>
       </div>
+
+      <InstallCard />
 
       <section className="space-y-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
