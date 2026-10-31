@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { saveBlitzScore } from "@/app/actions";
 import { Confetti, Floats, buzz, type FloatText } from "@/components/game/effects";
+import { play } from "@/components/game/sound";
 import { ArrowIcon, BoltIcon, HeartIcon, HomeIcon, PlayIcon, SwapIcon, TrophyIcon } from "@/components/icons";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
 import {
@@ -17,6 +18,7 @@ import {
   type BlitzQuestion,
 } from "@/lib/blitz";
 import { shuffled } from "@/lib/shuffle";
+import { countdownTick } from "@/lib/sound";
 
 type Phase = "ready" | "playing" | "over";
 
@@ -70,6 +72,8 @@ export function BlitzSession({
   const phaseRef = useRef<Phase>("ready");
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextId = useRef(1);
+  /** The last countdown second that ticked, so each one ticks once. */
+  const lastTick = useRef<number | null>(null);
 
   const enough = cards.length >= MIN_BLITZ_CARDS;
 
@@ -87,7 +91,11 @@ export function BlitzSession({
       setEndedBy(reason);
       setPicked(null);
       const { score } = roundRef.current;
-      if (score > best) setConfetti((value) => value + 1);
+      play("over");
+      if (score > best) {
+        setConfetti((value) => value + 1);
+        play("best", 1, 800);
+      }
       setSaveError(null);
       saveBlitzScore(deckId, score)
         .then(setBest)
@@ -116,7 +124,9 @@ export function BlitzSession({
     order.current = shuffled(cards);
     position.current = 0;
     startedAt.current = Date.now();
+    lastTick.current = null;
     phaseRef.current = "playing";
+    play("tap");
     setBestBefore(best);
     updateRound(FRESH);
     setTimeLeft(TOTAL_MS);
@@ -130,6 +140,11 @@ export function BlitzSession({
     const timer = setInterval(() => {
       const left = Math.max(0, TOTAL_MS - (Date.now() - startedAt.current));
       setTimeLeft(left);
+      const second = countdownTick(left, lastTick.current);
+      if (second !== null) {
+        lastTick.current = second;
+        play("clock");
+      }
       if (left === 0) finish("time");
     }, 100);
     return () => clearInterval(timer);
@@ -166,6 +181,7 @@ export function BlitzSession({
         ]);
         setTimeout(() => setFloats((items) => items.filter((item) => item.id !== id)), 1050);
         buzz(10);
+        play("right", streak);
         pending.current = setTimeout(ask, 380);
         return;
       }
@@ -174,6 +190,7 @@ export function BlitzSession({
       updateRound({ ...current, wrong: current.wrong + 1, streak: 0, hearts });
       setShake((value) => value + 1);
       buzz(60);
+      play("wrong");
       pending.current = setTimeout(() => (hearts <= 0 ? finish("hearts") : ask()), 950);
     },
     [ask, finish, picked, question, updateRound],

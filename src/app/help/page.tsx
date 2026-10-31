@@ -8,6 +8,7 @@ import {
   FlameIcon,
   FlipIcon,
   HeartIcon,
+  SoundIcon,
   StarIcon,
   SwapIcon,
 } from "@/components/icons";
@@ -216,6 +217,18 @@ export default function HelpPage() {
           </p>
         </section>
       </div>
+
+      <section className={`${panel} space-y-3`}>
+        <h2 className="flex items-center gap-2 text-lg font-extrabold">
+          <SoundIcon className="h-6 w-6 text-gold" />
+          Sound
+        </h2>
+        <p className="text-ink-muted">
+          Every flip and swipe makes a little sound, and answers in a row climb higher and higher.
+          Tap the speaker at the top to pick Arcade, Bubbly or Crisp, or to turn sound off. Each
+          phone or computer remembers its own choice. On an iPhone, the silent switch mutes it.
+        </p>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
         <section className={`${panel} space-y-3`}>

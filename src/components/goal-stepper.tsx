@@ -3,6 +3,7 @@
 import { useOptimistic, useTransition } from "react";
 
 import { updateDailyGoal } from "@/app/actions";
+import { play } from "@/components/game/sound";
 import { MinusIcon, PlusIcon } from "@/components/icons";
 import { MAX_DAILY_GOAL, MIN_DAILY_GOAL } from "@/lib/game";
 
@@ -16,6 +17,7 @@ export function GoalStepper({ goal }: { goal: number }) {
   function change(delta: number) {
     const next = Math.max(MIN_DAILY_GOAL, Math.min(MAX_DAILY_GOAL, shown + delta));
     if (next === shown) return;
+    play("tap");
     startTransition(async () => {
       setShown(next);
       await updateDailyGoal(next);

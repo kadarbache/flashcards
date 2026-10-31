@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Confetti } from "@/components/game/effects";
+import { play, useArmSound } from "@/components/game/sound";
 import { flingTransform, useSwipe, type Direction, type SwipeFrame } from "@/components/game/use-swipe";
 import { ArrowIcon, BoltIcon, FlipIcon, PlayIcon, ShuffleIcon } from "@/components/icons";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
@@ -86,12 +87,22 @@ export function PracticeSession({
     [order.length, paint],
   );
 
+  const armSound = useArmSound();
+
+  const flip = useCallback((next: boolean) => {
+    play("flip");
+    setFlipped(next);
+  }, []);
+
   /** Throw the card out, then move. Left is forward, right is back. */
   const move = useCallback(
     (direction: "left" | "right") => {
       if (busy.current || !card) return;
       if (direction === "right" && index === 0) return;
       busy.current = true;
+      play(direction === "left" ? "next" : "back");
+      // Off the end of the deck: the round-clear tune as the end screen comes in.
+      if (direction === "left" && index + 1 >= order.length) play("clear", 1, FLY_MS + 80);
       setLeaving(direction);
       paint(direction, 1, true);
       setTimeout(() => {
@@ -99,13 +110,15 @@ export function PracticeSession({
         goTo(direction === "left" ? index + 1 : index - 1, direction === "left" ? "next" : "back");
       }, FLY_MS);
     },
-    [card, goTo, index, paint],
+    [card, goTo, index, order.length, paint],
   );
 
   const back = useCallback(() => {
     // From the end screen there is no card to throw; just step back in.
-    if (!card) goTo(order.length - 1, "back");
-    else move("right");
+    if (!card) {
+      play("back");
+      goTo(order.length - 1, "back");
+    } else move("right");
   }, [card, goTo, move, order.length]);
 
   const restart = useCallback(() => {
@@ -117,8 +130,8 @@ export function PracticeSession({
   /** The main button, and space: reveal the answer, then move on. */
   const advance = useCallback(() => {
     if (flipped) move("left");
-    else setFlipped(true);
-  }, [flipped, move]);
+    else flip(true);
+  }, [flip, flipped, move]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -237,11 +250,14 @@ export function PracticeSession({
             card={card}
             hue={hue}
             flipped={flipped}
-            onFlip={setFlipped}
+            onFlip={flip}
             leaving={leaving}
             enter={cameFrom === "back" ? "anim-slide-in-left" : "anim-card-in"}
             canGoBack={index > 0}
-            onFrame={(frame) => paint(frame.direction, frame.progress)}
+            onFrame={(frame) => {
+              paint(frame.direction, frame.progress);
+              armSound(frame);
+            }}
             onSwipe={(direction) => {
               if (direction === "left" || direction === "right") move(direction);
             }}

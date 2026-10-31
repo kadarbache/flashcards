@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { signOutAction } from "@/app/login/actions";
 import { HelpIcon, HomeIcon, LogoMark } from "@/components/icons";
 import { PwaSetup } from "@/components/pwa";
+import { SoundMenu } from "@/components/sound-menu";
 
 import "./globals.css";
 
@@ -58,6 +59,7 @@ async function SessionControls() {
         <HelpIcon className="h-5 w-5" />
         <span className="hidden sm:inline">How to play</span>
       </Link>
+      <SoundMenu />
       <form action={signOutAction}>
         <button
           type="submit"

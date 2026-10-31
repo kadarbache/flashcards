@@ -195,6 +195,26 @@ export function HelpIcon({ className }: IconProps) {
   );
 }
 
+export function SoundIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+      <path d="M15.5 9a4 4 0 0 1 0 6" />
+      <path d="M18 6.5a7.5 7.5 0 0 1 0 11" />
+    </Line>
+  );
+}
+
+export function MuteIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+      <path d="M16 9.5l5 5" />
+      <path d="M21 9.5l-5 5" />
+    </Line>
+  );
+}
+
 export function DownloadIcon({ className }: IconProps) {
   return (
     <Line className={className}>

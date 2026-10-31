@@ -182,6 +182,19 @@ in a row, 300 from 6). Only the best score per deck is saved. Like practice it
 never touches a card, so it can be played as often as you like. It needs at
 least 4 cards in the deck.
 
+## Sound
+
+Flips, swipes, combos, level-ups and Blitz all have sound effects. They are
+synthesised in the browser with the Web Audio API (`src/components/game/sound.ts`),
+so there are no audio files to download, and they work offline. Good, Easy and
+Blitz right answers climb a pentatonic scale as a run builds; Again falls
+gently rather than buzzing, for the same reason it earns full XP.
+
+The speaker in the header picks one of three packs (Arcade, Bubbly, Crisp) or
+turns sound off. The choice is kept per device in `localStorage`. Browsers only
+start audio after a tap or key press, and on an iPhone the silent switch mutes
+it.
+
 ## Installing it on a phone
 
 The app is a Progressive Web App: a manifest, icons, and a small service worker

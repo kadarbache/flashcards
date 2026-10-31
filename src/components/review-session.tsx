@@ -8,6 +8,7 @@ import { Confetti, Floats, buzz, type FloatText } from "@/components/game/effect
 import { ARROW_KEYS, MOVES, moveFor, type GradeMove } from "@/components/game/grades";
 import { GoalRing, LevelBar, MultiplierPill, StreakPill } from "@/components/game/hud";
 import { ReviewCard } from "@/components/game/review-card";
+import { play, useArmSound } from "@/components/game/sound";
 import type { Direction, SwipeFrame } from "@/components/game/use-swipe";
 import {
   ArrowIcon,
@@ -22,6 +23,7 @@ import {
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
 import { COMBO_PAUSE_MS, multiplierFor, nextCombo, xpFor } from "@/lib/game";
 import type { NextCardResult } from "@/lib/decks";
+import { reachedNewTier } from "@/lib/sound";
 import type { PlayerStats, SessionResult } from "@/lib/stats";
 
 /** How long the card takes to fly off; the next one waits for it. */
@@ -111,17 +113,25 @@ export function ReviewSession({
     }
   }, []);
 
+  const armSound = useArmSound();
+
   const onFrame = useCallback(
     (frame: SwipeFrame) => {
       paintBackdrop(frame.direction, frame.progress);
+      armSound(frame);
       const next = frame.progress > 0 ? frame.direction : null;
       if (next !== aimRef.current) {
         aimRef.current = next;
         setAim(next);
       }
     },
-    [paintBackdrop],
+    [armSound, paintBackdrop],
   );
+
+  const flip = useCallback((next: boolean) => {
+    play("flip");
+    setFlipped(next);
+  }, []);
 
   const float = useCallback((text: string, color: string, top: number, size: number) => {
     const id = nextId.current++;
@@ -182,6 +192,8 @@ export function ReviewSession({
       setAim(move.direction);
       paintBackdrop(move.direction, 1);
       buzz(12);
+      play(move.grade, nowCombo);
+      if (reachedNewTier(nowCombo)) play("combo", 1, 220);
       float(`+${gained} XP`, "#FFD24A", 120, 30);
       if (nowCombo >= 3) float(`${nowCombo} in a row`, "#FF8A3D", 170, 19);
 
@@ -203,21 +215,29 @@ export function ReviewSession({
           bestCombo: Math.max(current.bestCombo, nowCombo),
         }));
 
+        let celebrated = true;
         if (result.player.level > player.level) {
           setConfetti((value) => value + 1);
           buzz(40);
+          play("level");
           showToast(`Level ${result.player.level}!`, `You are now a ${result.player.rank}.`);
         } else if (result.player.todayDone && !player.todayDone) {
           setConfetti((value) => value + 1);
           buzz(40);
+          play("goal");
           showToast(
             "Daily goal done!",
             `${result.player.streak} ${result.player.streak === 1 ? "day" : "days"} in a row.`,
           );
         } else if (nowCombo % 10 === 0) {
           setConfetti((value) => value + 1);
+          play("combo");
           showToast(`${nowCombo} in a row!`, "Keep the run going.");
+        } else {
+          celebrated = false;
         }
+        // Last card of the round: the round-clear tune, after any fanfare above.
+        if (!result.card) play("clear", 1, celebrated ? 1100 : 150);
 
         apply(result);
       } catch (cause) {
@@ -234,6 +254,8 @@ export function ReviewSession({
   const onSwipe = useCallback((direction: Direction) => void answer(moveFor(direction)), [answer]);
 
   const undo = useCallback(() => {
+    if (pending) return;
+    play("undo");
     void run(async () => {
       const result = await undoLastGrade(deckId, { exclude: skipped });
       const taken = earned.current.pop();
@@ -243,14 +265,15 @@ export function ReviewSession({
       setCombo((value) => Math.max(0, value - 1));
       return result;
     });
-  }, [deckId, run, skipped]);
+  }, [deckId, pending, run, skipped]);
 
   const skip = useCallback(() => {
-    if (!card) return;
+    if (!card || pending) return;
+    play("skip");
     const next = [...skipped, card.id];
     setSkipped(next);
     void run(() => refreshQueue(deckId, { exclude: next }));
-  }, [card, deckId, run, skipped]);
+  }, [card, deckId, pending, run, skipped]);
 
   const refresh = useCallback(() => {
     void run(() => refreshQueue(deckId, { exclude: skipped }));
@@ -291,7 +314,7 @@ export function ReviewSession({
         // Let a focused button or link handle its own key.
         if (target?.closest("button, a")) return;
         event.preventDefault();
-        if (!pending && leaving === null) setFlipped((was) => !was);
+        if (!pending && leaving === null) flip(!flipped);
         return;
       }
 
@@ -305,7 +328,7 @@ export function ReviewSession({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [answer, card, flipped, leaving, pending, queue.reviewedToday, skip, undo]);
+  }, [answer, card, flip, flipped, leaving, pending, queue.reviewedToday, skip, undo]);
 
   const progress = tally.answered / Math.max(1, tally.answered + remaining);
 
@@ -380,7 +403,7 @@ export function ReviewSession({
                 key={`${card.id}-${turn}`}
                 card={card}
                 flipped={flipped}
-                onFlip={setFlipped}
+                onFlip={flip}
                 leaving={leaving}
                 disabled={pending}
                 onFrame={onFrame}
@@ -410,7 +433,7 @@ export function ReviewSession({
             ) : (
               <button
                 type="button"
-                onClick={() => setFlipped(true)}
+                onClick={() => flip(true)}
                 disabled={pending}
                 className={`${primaryButton} min-h-16 w-full text-lg`}
               >
