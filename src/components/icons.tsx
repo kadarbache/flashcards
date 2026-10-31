@@ -215,6 +215,16 @@ export function MuteIcon({ className }: IconProps) {
   );
 }
 
+export function SignOutIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M14 4h4.5a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5H14" />
+      <path d="M10 8l-4 4 4 4" />
+      <path d="M6 12h10" />
+    </Line>
+  );
+}
+
 export function DownloadIcon({ className }: IconProps) {
   return (
     <Line className={className}>

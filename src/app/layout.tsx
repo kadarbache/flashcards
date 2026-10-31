@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { auth } from "@/auth";
 import { signOutAction } from "@/app/login/actions";
-import { HelpIcon, HomeIcon, LogoMark } from "@/components/icons";
+import { HelpIcon, HomeIcon, LogoMark, SignOutIcon } from "@/components/icons";
 import { PwaSetup } from "@/components/pwa";
 import { SoundMenu } from "@/components/sound-menu";
 
@@ -61,11 +61,15 @@ async function SessionControls() {
       </Link>
       <SoundMenu />
       <form action={signOutAction}>
+        {/* An icon on phones, where the header has no room for the words. */}
         <button
           type="submit"
-          className="ml-1 inline-flex h-10 items-center rounded-full border border-border-subtle px-3 text-sm font-semibold text-ink-muted transition hover:text-ink"
+          aria-label="Sign out"
+          title="Sign out"
+          className="ml-1 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle text-sm font-semibold whitespace-nowrap text-ink-muted transition hover:text-ink sm:w-auto sm:px-3"
         >
-          Sign out
+          <SignOutIcon className="h-5 w-5 sm:hidden" />
+          <span className="hidden sm:inline">Sign out</span>
         </button>
       </form>
     </nav>
