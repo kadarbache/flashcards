@@ -72,14 +72,20 @@ src/lib/srs/          the scheduler — pure, no database, no React
 src/lib/
   decks.ts            queries: deck lists, the review queue, card lists
   review.ts           answer a stored card and write history
+  game.ts             XP, combo, levels, streak and daily goal (pure)
+  stats.ts            the player's XP, level and streak from the history
+  blitz.ts            Blitz questions built from a deck's own cards (pure)
   import.ts           pasted text -> cards (pure)
   db/                 Mongoose connection and models
 src/app/
   actions.ts          Server Actions (thin wrappers over lib/)
-  page.tsx            deck list
+  page.tsx            home: streak, daily goal, level, decks
+  help/               how to play
   decks/[id]/         deck detail: import, settings, cards
-  decks/[id]/review/  the review session
+  decks/[id]/review/  the review session (swipe to answer)
   decks/[id]/practice/  ungraded practice, outside the scheduler
+  decks/[id]/blitz/   timed multiple choice, outside the scheduler
+  manifest.ts, icons/ what makes the app installable
 ```
 
 The scheduler is a pure `(card, button) -> card` function with `now` and the
@@ -107,9 +113,18 @@ card is a minute away, the screen counts down and pulls it in when it lands.
 
 ### The review screen
 
-The card flips in 3D to reveal the answer, and the four grade buttons carry the
-interval each one would give. Keyboard: **space** flips, **1-4** grade,
-**left arrow** undoes, **right arrow** skips.
+Tap the card to flip it, then swipe to answer: **left** Again, **down** Hard,
+**right** Good, **up** Easy. There are no grade buttons. Once the card is face
+up, four tiles under it show the interval each swipe would give, and while you
+drag, a stamp on the card shows it too ("Good, back in 10m"). Let go short of
+the edge and the card springs back.
+
+A swipe calls the same `gradeCard` as the old buttons did, so the schedule
+cannot tell the difference.
+
+Keyboard: **space** flips, the **arrow keys** answer the same way the swipes do,
+**1-4** grade too, **U** undoes, **S** skips. On a wide screen a side panel
+shows today's goal, the round so far and the keys.
 
 - **Undo** restores the card from a complete snapshot taken before the answer --
   state, step, interval, ease, due date, lapses and reps -- then deletes the
@@ -136,9 +151,53 @@ it could call to move a due date, change an ease or add a history row. A
 practice run does not count towards "answered today" either. Review decides when
 you see a card next; practice has no say in it.
 
+Swipe left for the next card and right to go back. Every card has its own
+colour, and the background blends from one to the next as you drag.
+
 Keyboard: **space** reveals the answer and then moves on, **left / right
 arrow** step back and forward. At the end, **Shuffle and go again** deals the
 deck in a new order.
+
+## The game layer
+
+XP, levels, streaks and combos sit on top of the scheduler and never change
+when a card comes back.
+
+- **XP.** Every answer is worth 10 XP whatever the grade, so "Again" costs
+  nothing and there is no reason to lie to the scheduler. The XP is stored on
+  the history row, so undoing an answer takes it back.
+- **Combo.** Answers with no pause longer than 20 seconds between them build a
+  run: x1.5 XP from 3 in a row, x2 from 6.
+- **Levels.** Level n needs 200 + 50(n-1) XP. Ranks go from Rookie to Sage.
+- **Daily goal and streak.** A day counts when its answers reach the goal (20
+  to start, set with - and + on the home screen). Days in a row make the
+  streak. Days follow the browser's time zone, which the app keeps in a `tz`
+  cookie, so midnight is your midnight and not the server's.
+
+## Blitz
+
+A minute of multiple choice: the word, and four meanings taken from the same
+deck. Three hearts, and right answers in a row score more (100, then 200 from 3
+in a row, 300 from 6). Only the best score per deck is saved. Like practice it
+never touches a card, so it can be played as often as you like. It needs at
+least 4 cards in the deck.
+
+## Installing it on a phone
+
+The app is a Progressive Web App: a manifest, icons, and a small service worker
+(`public/sw.js`) that keeps the build files and shows an offline page when
+there is no network. Pages themselves are never cached, since they hold live
+data behind the sign-in.
+
+Installing needs HTTPS, so do it from the deployed site, not from `localhost`:
+
+- **Android (Chrome):** menu, then **Install app**, or the install card on the
+  home screen.
+- **iPhone (Safari):** Share, then **Add to Home Screen**.
+- **Desktop (Chrome or Edge):** the install icon in the address bar.
+
+The service worker is only registered in production builds, because in
+development it would cache files that hot reload keeps replacing.
 
 ## HTTP API
 
