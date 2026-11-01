@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import {
   ArrowIcon,
+  BellIcon,
   BoltIcon,
   DownloadIcon,
   FlameIcon,
@@ -244,6 +245,18 @@ export default function HelpPage() {
             learn it, Silver when it holds for 21 days, Gold when it holds for 90. Answering Good
             moves words up on their own; forgetting one drops it back to Bronze. A new medal pops up
             right in the review.
+          </p>
+        </section>
+        <section className={`${panel} space-y-3`}>
+          <h2 className="flex items-center gap-2 text-lg font-extrabold">
+            <BellIcon className="h-6 w-6 text-good" />
+            Evening reminder
+          </h2>
+          <p className="text-ink-muted">
+            Turn it on from the home screen, on each phone or computer you use. Once a day in the
+            evening, if your goal is not done or today&apos;s word is still waiting, you get one
+            notification. On a day that is already done, nothing comes. On iPhone, add the app to
+            your Home Screen first.
           </p>
         </section>
       </div>

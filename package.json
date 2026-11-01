@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "set-password": "node scripts/set-password.mjs",
+    "setup-reminders": "node scripts/setup-reminders.mjs",
     "test": "node --import ./scripts/register-alias.mjs --test \"src/**/*.test.ts\"",
     "test:watch": "node --import ./scripts/register-alias.mjs --test --watch \"src/**/*.test.ts\""
   },
@@ -17,13 +18,15 @@
     "next": "16.3.6",
     "next-auth": "^5.0.0-beta.32",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "mongodb-memory-server": "^11.3.0",

@@ -327,6 +327,16 @@ export function MedalIcon({
   );
 }
 
+/** A bell, for reminders. */
+export function BellIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16z" />
+      <path d="M10 21a2 2 0 0 0 4 0" />
+    </Line>
+  );
+}
+
 /** A grid of cards, for the collection album. */
 export function AlbumIcon({ className }: IconProps) {
   return (

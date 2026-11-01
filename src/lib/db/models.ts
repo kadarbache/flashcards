@@ -48,6 +48,8 @@ const profileSchema = new Schema(
       min: MIN_DAILY_GOAL,
       max: MAX_DAILY_GOAL,
     },
+    /** The day (YYYY-MM-DD) the last evening reminder went out, so it goes once a day. */
+    lastReminderDay: { type: String, default: null },
   },
   { timestamps: true },
 );
@@ -142,8 +144,28 @@ const dailyWordSchema = new Schema(
   { timestamps: true },
 );
 
+/**
+ * A phone or browser that turned reminders on. One row per push subscription:
+ * the endpoint is the address the browser's push service gave it, and the
+ * keys encrypt what is sent there.
+ */
+const pushDeviceSchema = new Schema(
+  {
+    endpoint: { type: String, required: true, unique: true },
+    keys: {
+      p256dh: { type: String, required: true },
+      auth: { type: String, required: true },
+    },
+    /** The device's time zone when it subscribed, so the job knows whose evening it is. */
+    timeZone: { type: String, default: "UTC" },
+    lastSentAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+
 export type DeckDocument = InferSchemaType<typeof deckSchema>;
 export type DailyWordDocument = InferSchemaType<typeof dailyWordSchema>;
+export type PushDeviceDocument = InferSchemaType<typeof pushDeviceSchema>;
 export type ProfileDocument = InferSchemaType<typeof profileSchema>;
 export type CardDocument = InferSchemaType<typeof cardSchema>;
 export type ReviewLogDocument = InferSchemaType<typeof reviewLogSchema>;
@@ -185,3 +207,7 @@ export const Profile: Model<ProfileDocument> =
 dropStaleModel("DailyWord");
 export const DailyWord: Model<DailyWordDocument> =
   (models.DailyWord as Model<DailyWordDocument>) || model("DailyWord", dailyWordSchema);
+
+dropStaleModel("PushDevice");
+export const PushDevice: Model<PushDeviceDocument> =
+  (models.PushDevice as Model<PushDeviceDocument>) || model("PushDevice", pushDeviceSchema);

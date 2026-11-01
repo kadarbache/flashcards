@@ -17,6 +17,7 @@ import {
   SwapIcon,
 } from "@/components/icons";
 import { InstallCard } from "@/components/pwa";
+import { ReminderCard } from "@/components/reminder-card";
 import { SetupNotice } from "@/components/setup-notice";
 import { panel } from "@/components/ui";
 import { MIN_BLITZ_CARDS } from "@/lib/blitz";
@@ -25,6 +26,8 @@ import { requestTimeZone } from "@/lib/request-time-zone";
 import { getPlayerStats, type PlayerStats } from "@/lib/stats";
 import type { TierCounts } from "@/lib/collection";
 import { getCollectionCounts } from "@/lib/collection-db";
+import { localReminderTime } from "@/lib/reminders";
+import { vapidKeys } from "@/lib/reminders-db";
 import { getWordOfTheDay, type WordOfTheDay } from "@/lib/word-of-the-day-db";
 
 /**
@@ -153,6 +156,11 @@ export default async function Home() {
         <WordTile word={word} />
         <CollectionTile counts={collection} />
       </div>
+
+      <ReminderCard
+        publicKey={vapidKeys()?.publicKey ?? null}
+        time={localReminderTime(timeZone)}
+      />
 
       <InstallCard />
 

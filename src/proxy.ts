@@ -32,6 +32,7 @@ export const config = {
      *   api/decks -- the bulk-import API, which authenticates with its own
      *                x-api-key header; gating it on a browser cookie would
      *                break every Postman call
+     *   api/cron  -- scheduled jobs, which authenticate with CRON_SECRET
      *   login     -- the form
      *   _next, favicon -- assets, which would otherwise redirect and leave the
      *                     login page unstyled
@@ -40,6 +41,6 @@ export const config = {
      *                     manifest and icons without cookies, and the offline
      *                     page is saved before anyone may be signed in.
      */
-    "/((?!api/auth|api/decks|login|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/|icon|apple-icon|offline).*)",
+    "/((?!api/auth|api/decks|api/cron|login|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/|icon|apple-icon|offline).*)",
   ],
 };

@@ -16,6 +16,13 @@ import {
 import { addCardsToDeck } from "@/lib/cards";
 import { parseCards, SEPARATORS, type SeparatorName } from "@/lib/import";
 import { requestTimeZone } from "@/lib/request-time-zone";
+import {
+  isDeviceSubscription,
+  removeDevice,
+  saveDevice,
+  sendTestReminder,
+  vapidKeys,
+} from "@/lib/reminders-db";
 import { answerCard, undoLastAnswer } from "@/lib/review";
 import type { Grade } from "@/lib/srs/types";
 import { getPlayerStats, setDailyGoal, type SessionResult } from "@/lib/stats";
@@ -331,4 +338,34 @@ export async function answerDailyWord(day: string, result: WordResult): Promise<
     revalidatePath("/word");
   }
   return outcome;
+}
+
+/**
+ * Reminders: save this device's push subscription, so the evening job can
+ * reach it. Called when reminders are turned on, and again on later visits to
+ * keep the device's time zone current.
+ */
+export async function enableReminders(subscription: unknown): Promise<FormState> {
+  await requireSession();
+  if (!vapidKeys()) return { ok: false, message: "Reminders are not set up on the server yet." };
+  if (!isDeviceSubscription(subscription)) {
+    return { ok: false, message: "This device sent a subscription that could not be read." };
+  }
+  await saveDevice(subscription, await requestTimeZone());
+  return { ok: true, message: "Reminders are on." };
+}
+
+export async function disableReminders(endpoint: string): Promise<void> {
+  await requireSession();
+  if (typeof endpoint === "string" && endpoint !== "") await removeDevice(endpoint);
+}
+
+/** Send a test notification to this device. */
+export async function testReminder(endpoint: string): Promise<FormState> {
+  await requireSession();
+  if (!vapidKeys()) return { ok: false, message: "Reminders are not set up on the server yet." };
+  const ok = typeof endpoint === "string" && (await sendTestReminder(endpoint));
+  return ok
+    ? { ok: true, message: "Sent. It should pop up in a few seconds." }
+    : { ok: false, message: "That did not go through. Try turning reminders off and on." };
 }
