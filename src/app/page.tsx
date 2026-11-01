@@ -10,6 +10,7 @@ import {
   FlameIcon,
   GearIcon,
   HelpIcon,
+  MedalIcon,
   PlayIcon,
   StarIcon,
   SunIcon,
@@ -22,6 +23,8 @@ import { MIN_BLITZ_CARDS } from "@/lib/blitz";
 import { listDecks, type DeckSummary } from "@/lib/decks";
 import { requestTimeZone } from "@/lib/request-time-zone";
 import { getPlayerStats, type PlayerStats } from "@/lib/stats";
+import type { TierCounts } from "@/lib/collection";
+import { getCollectionCounts } from "@/lib/collection-db";
 import { getWordOfTheDay, type WordOfTheDay } from "@/lib/word-of-the-day-db";
 
 /**
@@ -38,11 +41,13 @@ export default async function Home() {
   let decks: DeckSummary[];
   let player: PlayerStats;
   let word: WordOfTheDay;
+  let collection: TierCounts;
   try {
-    [decks, player, word] = await Promise.all([
+    [decks, player, word, collection] = await Promise.all([
       listDecks(),
       getPlayerStats(timeZone),
       getWordOfTheDay(timeZone),
+      getCollectionCounts(),
     ]);
   } catch (error) {
     // Most likely no MONGODB_URI, a bad password, or an Atlas IP allow-list
@@ -144,7 +149,10 @@ export default async function Home() {
         </section>
       </div>
 
-      <WordTile word={word} />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <WordTile word={word} />
+        <CollectionTile counts={collection} />
+      </div>
 
       <InstallCard />
 
@@ -181,6 +189,45 @@ export default async function Home() {
         <DeckForm />
       </section>
     </div>
+  );
+}
+
+/** The way into the collection album, with the medal counts. */
+function CollectionTile({ counts }: { counts: TierCounts }) {
+  const collected = counts.gold + counts.silver + counts.bronze;
+  const best = counts.gold > 0 ? "gold" : counts.silver > 0 ? "silver" : collected > 0 ? "bronze" : "locked";
+  return (
+    <Link
+      href="/collection"
+      className="anim-rise group flex items-center gap-4 rounded-3xl bg-surface-raised p-4 transition hover:bg-surface-high active:scale-[0.99] sm:p-5"
+    >
+      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface-high">
+        <MedalIcon tier={best} className="h-9 w-9" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-extrabold tracking-wide text-gold uppercase">
+          Collection
+        </span>
+        <span className="block truncate text-lg font-extrabold tabular-nums">
+          {collected} of {counts.total} words collected
+        </span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-sm text-ink-muted tabular-nums">
+          <span>
+            <b className="text-gold">{counts.gold}</b> gold
+          </span>
+          <span>
+            <b className="text-[#C9D3E6]">{counts.silver}</b> silver
+          </span>
+          <span>
+            <b className="text-[#E5AE7C]">{counts.bronze}</b> bronze
+          </span>
+        </span>
+      </span>
+      <ChevronIcon
+        direction="right"
+        className="h-5 w-5 shrink-0 text-ink-muted transition group-hover:translate-x-0.5"
+      />
+    </Link>
   );
 }
 

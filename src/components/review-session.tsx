@@ -21,6 +21,7 @@ import {
   UndoIcon,
 } from "@/components/icons";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
+import { TIER_LABEL } from "@/lib/collection";
 import { COMBO_PAUSE_MS, multiplierFor, nextCombo, xpFor } from "@/lib/game";
 import type { NextCardResult } from "@/lib/decks";
 import { reachedNewTier } from "@/lib/sound";
@@ -229,6 +230,17 @@ export function ReviewSession({
             "Daily goal done!",
             `${result.player.streak} ${result.player.streak === 1 ? "day" : "days"} in a row.`,
           );
+        } else if (result.rankUp && result.rankUp.tier !== "bronze") {
+          setConfetti((value) => value + 1);
+          buzz(30);
+          play("level");
+          showToast(
+            `${TIER_LABEL[result.rankUp.tier]} word!`,
+            `“${result.rankUp.front}” moved up in your collection.`,
+          );
+        } else if (result.rankUp) {
+          play("combo");
+          showToast("New word collected", `“${result.rankUp.front}” is now Bronze.`);
         } else if (nowCombo % 10 === 0) {
           setConfetti((value) => value + 1);
           play("combo");

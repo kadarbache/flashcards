@@ -298,3 +298,43 @@ export function SunIcon({ className }: IconProps) {
     </Line>
   );
 }
+
+const MEDAL_COLORS = {
+  bronze: { face: "#D99A62", rim: "#9C5B2A", ribbon: "#B4532A" },
+  silver: { face: "#DCE3F0", rim: "#8E9AB3", ribbon: "#5B6FA0" },
+  gold: { face: "#FFD24A", rim: "#C28A00", ribbon: "#E0483E" },
+  locked: { face: "#3A3458", rim: "#2F2A4A", ribbon: "#2F2A4A" },
+} as const;
+
+/** A medal for a collection rank. Filled, like the other game pieces. */
+export function MedalIcon({
+  className,
+  tier,
+}: IconProps & { tier: keyof typeof MEDAL_COLORS }) {
+  const color = MEDAL_COLORS[tier];
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className ?? "h-6 w-6"}>
+      <path d="M7 2h4l2.2 6.5-3.6 1.6L7 2z" fill={color.ribbon} />
+      <path d="M17 2h-4l-2.2 6.5 3.6 1.6L17 2z" fill={color.ribbon} opacity="0.8" />
+      <circle cx="12" cy="15" r="7" fill={color.rim} />
+      <circle cx="12" cy="15" r="5.3" fill={color.face} />
+      <path
+        d="M12 11.6l1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3 1-2.1z"
+        fill={color.rim}
+        opacity="0.55"
+      />
+    </svg>
+  );
+}
+
+/** A grid of cards, for the collection album. */
+export function AlbumIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.8" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.8" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.8" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.8" />
+    </Line>
+  );
+}

@@ -8,6 +8,7 @@ import {
   FlameIcon,
   FlipIcon,
   HeartIcon,
+  MedalIcon,
   SoundIcon,
   StarIcon,
   SunIcon,
@@ -231,6 +232,21 @@ export default function HelpPage() {
           in a row. Like Practice and Blitz, it never changes your schedule.
         </p>
       </section>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+        <section className={`${panel} space-y-3`}>
+          <h2 className="flex items-center gap-2 text-lg font-extrabold">
+            <MedalIcon tier="gold" className="h-6 w-6" />
+            Collection
+          </h2>
+          <p className="text-ink-muted">
+            Every word has a slot in your album and earns a medal as it sticks. Bronze once you
+            learn it, Silver when it holds for 21 days, Gold when it holds for 90. Answering Good
+            moves words up on their own; forgetting one drops it back to Bronze. A new medal pops up
+            right in the review.
+          </p>
+        </section>
+      </div>
 
       <section className={`${panel} space-y-3`}>
         <h2 className="flex items-center gap-2 text-lg font-extrabold">

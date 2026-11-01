@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/db/connect";
 import { Profile, ReviewLog } from "@/lib/db/models";
 import type { NextCardResult } from "@/lib/decks";
+import type { RankUp } from "@/lib/review";
 import {
   clampGoal,
   dayKey,
@@ -31,8 +32,11 @@ export interface PlayerStats {
   week: WeekDay[];
 }
 
-/** What the review screen gets back after every move. */
-export type SessionResult = NextCardResult & { player: PlayerStats };
+/**
+ * What the review screen gets back after every move. `rankUp` is only set by
+ * an answer that promoted the card in the collection.
+ */
+export type SessionResult = NextCardResult & { player: PlayerStats; rankUp?: RankUp | null };
 
 /** How far back daily counts are read. Plenty for a streak and a best streak. */
 const HISTORY_DAYS = 400;

@@ -2,10 +2,17 @@ import mongoose from "mongoose";
 
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
+import { promotion, type Tier } from "@/lib/collection";
 import { configFor, toReviewState } from "@/lib/decks";
 import { xpFor } from "@/lib/game";
 import { review } from "@/lib/srs/scheduler";
 import { GRADES, type Grade } from "@/lib/srs/types";
+
+/** A card that just moved up a rank in the collection. */
+export interface RankUp {
+  front: string;
+  tier: Tier;
+}
 
 /**
  * Answer one stored card: run it through the scheduler, save the new state and
@@ -17,13 +24,16 @@ import { GRADES, type Grade } from "@/lib/srs/types";
  *
  * `combo` is how many answers in a row the session is on, counting this one.
  * It only sets the XP the answer is worth; the grade alone decides scheduling.
+ *
+ * `rankUp` is set when the answer moved the card up a rank in the collection
+ * (Bronze, Silver, Gold), so the screen can celebrate it.
  */
 export async function answerCard(
   cardId: string,
   grade: Grade,
   elapsedMs: number | null = null,
   combo = 1,
-): Promise<{ deckId: string; xp: number }> {
+): Promise<{ deckId: string; xp: number; rankUp: RankUp | null }> {
   if (!mongoose.Types.ObjectId.isValid(cardId)) {
     throw new Error("Unknown card.");
   }
@@ -78,7 +88,12 @@ export async function answerCard(
     throw error;
   }
 
-  return { deckId: String(card.deckId), xp };
+  const tier = promotion(before, after);
+  return {
+    deckId: String(card.deckId),
+    xp,
+    rankUp: tier ? { front: card.front, tier } : null,
+  };
 }
 
 /**

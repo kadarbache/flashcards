@@ -244,12 +244,12 @@ export async function gradeCard(
   combo = 1,
 ): Promise<SessionResult> {
   await requireSession();
-  const { deckId } = await answerCard(cardId, grade, elapsedMs, combo);
+  const { deckId, rankUp } = await answerCard(cardId, grade, elapsedMs, combo);
 
   revalidatePath("/");
   revalidatePath(`/decks/${deckId}`);
 
-  return withPlayer(getNextCard(deckId, options));
+  return { ...(await withPlayer(getNextCard(deckId, options))), rankUp };
 }
 
 /**
