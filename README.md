@@ -76,6 +76,8 @@ src/lib/
   stats.ts            the player's XP, level and streak from the history
   blitz.ts            Blitz questions built from a deck's own cards (pure)
   word-of-the-day.ts  Word of the Day record and streak (pure); -db.ts picks and saves
+  collection.ts       Bronze/Silver/Gold ranks from a card's interval (pure)
+  reminders.ts        evening reminder wording and timing (pure); -db.ts sends
   import.ts           pasted text -> cards (pure)
   db/                 Mongoose connection and models
 src/app/
@@ -87,6 +89,8 @@ src/app/
   decks/[id]/practice/  ungraded practice, outside the scheduler
   decks/[id]/blitz/   timed multiple choice, outside the scheduler
   word/               Word of the Day, one learned word a day
+  collection/         the album: every word with its medal
+  api/cron/reminders/ the evening reminder job, called by Vercel Cron
   manifest.ts, icons/ what makes the app installable
 ```
 
@@ -197,6 +201,48 @@ copied onto that day's row so the history still reads right after a card is
 edited or deleted. Words from the last 30 days are not picked again while others
 are left. Days follow your time zone, like the streak. It never touches a card's
 schedule.
+
+## Collection
+
+Every card has a slot in the album at `/collection` and a medal read straight
+off its schedule, so nothing extra is stored:
+
+| Medal  | When                                    |
+| ------ | --------------------------------------- |
+| Bronze | learned: the card has graduated         |
+| Silver | its interval is 21 days or more         |
+| Gold   | its interval is 90 days or more         |
+
+Answering Good and Easy moves words up on their own. Again resets the interval,
+so a lapsed word drops back to Bronze. When an answer earns a new medal, the
+review screen says so.
+
+## Evening reminder
+
+Turn it on from the home screen, per device. Once a day the job at
+`/api/cron/reminders` checks today: if the daily goal is not met or today's word
+is still waiting, every device gets one notification ("Your 12-day streak ends
+in 3 hours"). A day that is already done gets nothing.
+
+It needs three environment variables, made by:
+
+```bash
+npm run setup-reminders
+```
+
+Add `-- --vercel` to send them to Vercel production as well (needs the Vercel
+CLI, linked), then redeploy. Keep the key pair once devices have subscribed: a
+new pair cuts them all off.
+
+The schedule is in `vercel.json`: 17:00 UTC, which is 20:00 in East Africa.
+Vercel's free plan runs a cron job once a day, at some point within that hour,
+which is why there is one fixed reminder time rather than a picker. Change the
+hour in `vercel.json` and `REMINDER_UTC_HOUR` together (a test checks they
+match). The job authenticates with `CRON_SECRET`, which Vercel sends as a bearer
+token, and answers 503 when it is not set.
+
+On iPhone, notifications need the app added to the Home Screen first (iOS 16.4
+or later).
 
 ## Sound
 
