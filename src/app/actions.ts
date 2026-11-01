@@ -19,6 +19,8 @@ import { requestTimeZone } from "@/lib/request-time-zone";
 import { answerCard, undoLastAnswer } from "@/lib/review";
 import type { Grade } from "@/lib/srs/types";
 import { getPlayerStats, setDailyGoal, type SessionResult } from "@/lib/stats";
+import type { WordResult } from "@/lib/word-of-the-day";
+import { answerWordOfTheDay, type AnswerOutcome } from "@/lib/word-of-the-day-db";
 
 /** The next card plus fresh XP and streak numbers for the HUD. */
 async function withPlayer(next: Promise<NextCardResult>): Promise<SessionResult> {
@@ -318,4 +320,15 @@ export async function saveBlitzScore(deckId: string, score: number): Promise<num
   revalidatePath("/");
   revalidatePath(`/decks/${deckId}`);
   return best;
+}
+
+/** Word of the Day: say whether you knew the word. Returns the updated record. */
+export async function answerDailyWord(day: string, result: WordResult): Promise<AnswerOutcome> {
+  await requireSession();
+  const outcome = await answerWordOfTheDay(day, result, await requestTimeZone());
+  if (outcome.ok) {
+    revalidatePath("/");
+    revalidatePath("/word");
+  }
+  return outcome;
 }

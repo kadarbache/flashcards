@@ -10,6 +10,7 @@ import {
   HeartIcon,
   SoundIcon,
   StarIcon,
+  SunIcon,
   SwapIcon,
 } from "@/components/icons";
 import { panel, primaryButton } from "@/components/ui";
@@ -217,6 +218,19 @@ export default function HelpPage() {
           </p>
         </section>
       </div>
+
+      <section className={`${panel} space-y-3`}>
+        <h2 className="flex items-center gap-2 text-lg font-extrabold">
+          <SunIcon className="h-6 w-6 text-gold" />
+          Word of the Day
+        </h2>
+        <p className="text-ink-muted">
+          Each day one word you have already learned comes back as a single card. Say it in your
+          head, flip, then tap Knew it or Missed it (or swipe right or left). You get one answer a
+          day. The days you knew it and the days you missed it are counted, with a streak for days
+          in a row. Like Practice and Blitz, it never changes your schedule.
+        </p>
+      </section>
 
       <section className={`${panel} space-y-3`}>
         <h2 className="flex items-center gap-2 text-lg font-extrabold">

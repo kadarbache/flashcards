@@ -6,11 +6,13 @@ import { GoalStepper } from "@/components/goal-stepper";
 import {
   BoltIcon,
   CheckIcon,
+  ChevronIcon,
   FlameIcon,
   GearIcon,
   HelpIcon,
   PlayIcon,
   StarIcon,
+  SunIcon,
   SwapIcon,
 } from "@/components/icons";
 import { InstallCard } from "@/components/pwa";
@@ -20,6 +22,7 @@ import { MIN_BLITZ_CARDS } from "@/lib/blitz";
 import { listDecks, type DeckSummary } from "@/lib/decks";
 import { requestTimeZone } from "@/lib/request-time-zone";
 import { getPlayerStats, type PlayerStats } from "@/lib/stats";
+import { getWordOfTheDay, type WordOfTheDay } from "@/lib/word-of-the-day-db";
 
 /**
  * The deck list is live data: due counts change as cards come due, with no
@@ -34,8 +37,13 @@ export default async function Home() {
 
   let decks: DeckSummary[];
   let player: PlayerStats;
+  let word: WordOfTheDay;
   try {
-    [decks, player] = await Promise.all([listDecks(), getPlayerStats(timeZone)]);
+    [decks, player, word] = await Promise.all([
+      listDecks(),
+      getPlayerStats(timeZone),
+      getWordOfTheDay(timeZone),
+    ]);
   } catch (error) {
     // Most likely no MONGODB_URI, a bad password, or an Atlas IP allow-list
     // miss. Say so instead of throwing a stack trace at the user.
@@ -136,6 +144,8 @@ export default async function Home() {
         </section>
       </div>
 
+      <WordTile word={word} />
+
       <InstallCard />
 
       <section className="space-y-4">
@@ -171,6 +181,58 @@ export default async function Home() {
         <DeckForm />
       </section>
     </div>
+  );
+}
+
+/** The way into Word of the Day, saying whether today's word is still waiting. */
+function WordTile({ word }: { word: WordOfTheDay }) {
+  const today = word.today;
+  const { knew, missed, streak } = word.record;
+  const waiting = today !== null && today.result === null;
+
+  let headline = "Unlocks when you learn your first word";
+  if (today?.result === "knew") headline = `You knew “${today.front}”`;
+  else if (today?.result === "missed") headline = `You missed “${today.front}”`;
+  else if (today) headline = "A word you learned is waiting";
+
+  return (
+    <Link
+      href="/word"
+      className={`anim-rise group flex items-center gap-4 rounded-3xl border p-4 transition active:scale-[0.99] sm:p-5 ${
+        waiting
+          ? "border-[#5c4a14] bg-[#272010] hover:bg-[#2e2612]"
+          : "border-transparent bg-surface-raised hover:bg-surface-high"
+      }`}
+    >
+      <span
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+          waiting ? "anim-pulse bg-gold text-paper-ink" : "bg-surface-high text-gold"
+        }`}
+      >
+        <SunIcon className="h-8 w-8" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-extrabold tracking-wide text-gold uppercase">
+          Word of the Day
+        </span>
+        <span className="block truncate text-lg font-extrabold">{headline}</span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-sm text-ink-muted">
+          <span>
+            <b className="text-good">{knew}</b> knew
+          </span>
+          <span>
+            <b className="text-again">{missed}</b> missed
+          </span>
+          {streak > 0 && (
+            <span className="flex items-center gap-1 font-bold text-flame">
+              <FlameIcon className="h-3.5 w-3.5" />
+              {streak} in a row
+            </span>
+          )}
+        </span>
+      </span>
+      <ChevronIcon direction="right" className="h-5 w-5 shrink-0 text-ink-muted transition group-hover:translate-x-0.5" />
+    </Link>
   );
 }
 

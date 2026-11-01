@@ -7,6 +7,7 @@ const { Schema, model, models } = mongoose;
 
 import { DEFAULT_DAILY_GOAL, MAX_DAILY_GOAL, MIN_DAILY_GOAL, XP_PER_ANSWER } from "@/lib/game";
 import { DEFAULT_CONFIG, GRADES } from "@/lib/srs/types";
+import { WORD_RESULTS } from "@/lib/word-of-the-day";
 
 /**
  * Deck settings that feed the scheduler. Only the knobs worth exposing per
@@ -120,7 +121,29 @@ reviewLogSchema.index({ deckId: 1, reviewedAt: -1 });
 // Daily counts for the streak, across every deck.
 reviewLogSchema.index({ reviewedAt: -1 });
 
+/**
+ * One row per day of Word of the Day. The word is copied onto the row when it
+ * is picked, so the history still reads right after the card is edited or
+ * deleted, and the pick for a day never changes once made.
+ */
+const dailyWordSchema = new Schema(
+  {
+    /** YYYY-MM-DD on the player's calendar. */
+    day: { type: String, required: true, unique: true },
+    cardId: { type: Schema.Types.ObjectId, ref: "Card", required: true },
+    deckId: { type: Schema.Types.ObjectId, ref: "Deck", required: true },
+    deckName: { type: String, default: "" },
+    front: { type: String, required: true },
+    back: { type: String, required: true },
+    /** Null until answered. */
+    result: { type: String, enum: [...WORD_RESULTS], default: null },
+    answeredAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+
 export type DeckDocument = InferSchemaType<typeof deckSchema>;
+export type DailyWordDocument = InferSchemaType<typeof dailyWordSchema>;
 export type ProfileDocument = InferSchemaType<typeof profileSchema>;
 export type CardDocument = InferSchemaType<typeof cardSchema>;
 export type ReviewLogDocument = InferSchemaType<typeof reviewLogSchema>;
@@ -158,3 +181,7 @@ export const ReviewLog: Model<ReviewLogDocument> =
 dropStaleModel("Profile");
 export const Profile: Model<ProfileDocument> =
   (models.Profile as Model<ProfileDocument>) || model("Profile", profileSchema);
+
+dropStaleModel("DailyWord");
+export const DailyWord: Model<DailyWordDocument> =
+  (models.DailyWord as Model<DailyWordDocument>) || model("DailyWord", dailyWordSchema);
