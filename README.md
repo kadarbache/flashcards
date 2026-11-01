@@ -75,6 +75,7 @@ src/lib/
   game.ts             XP, combo, levels, streak and daily goal (pure)
   stats.ts            the player's XP, level and streak from the history
   blitz.ts            Blitz questions built from a deck's own cards (pure)
+  word-of-the-day.ts  Word of the Day record and streak (pure); -db.ts picks and saves
   import.ts           pasted text -> cards (pure)
   db/                 Mongoose connection and models
 src/app/
@@ -85,6 +86,7 @@ src/app/
   decks/[id]/review/  the review session (swipe to answer)
   decks/[id]/practice/  ungraded practice, outside the scheduler
   decks/[id]/blitz/   timed multiple choice, outside the scheduler
+  word/               Word of the Day, one learned word a day
   manifest.ts, icons/ what makes the app installable
 ```
 
@@ -181,6 +183,20 @@ deck. Three hearts, and right answers in a row score more (100, then 200 from 3
 in a row, 300 from 6). Only the best score per deck is saved. Like practice it
 never touches a card, so it can be played as often as you like. It needs at
 least 4 cards in the deck.
+
+## Word of the Day
+
+Once a day, one word you have already learned (a card that has graduated to
+review, in any deck) comes back as a single flashcard. Flip it, then say whether
+you knew it: Knew it or Missed it, or swipe right or left. One answer a day. The
+screen counts the days you knew it and the days you missed it, keeps a streak of
+days in a row you knew it, and shows the last four weeks on a calendar.
+
+The pick for a day is saved, so it stays the same all day, and the word is
+copied onto that day's row so the history still reads right after a card is
+edited or deleted. Words from the last 30 days are not picked again while others
+are left. Days follow your time zone, like the streak. It never touches a card's
+schedule.
 
 ## Sound
 
