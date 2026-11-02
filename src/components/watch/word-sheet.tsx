@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { addWordToDeck, defineWord } from "@/app/watch/actions";
 import { play } from "@/components/game/sound";
 import { CheckIcon, CloseIcon, PlusIcon, SpeakIcon } from "@/components/icons";
+import { Sheet } from "@/components/sheet";
 import { field, iconButton, label, primaryButton } from "@/components/ui";
 import type { DictionaryEntry, LookupOutcome } from "@/lib/dictionary";
 
@@ -65,29 +66,10 @@ export function WordSheet({
   onClose: () => void;
   onAdded: (front: string) => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-
-  // The native dialog gives Escape, focus trapping and the backdrop for free.
-  useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    if (pick && !element.open) element.showModal();
-    if (!pick && element.open) element.close();
-  }, [pick]);
-
   return (
-    <dialog
-      ref={dialog}
-      onClose={onClose}
-      onClick={(event) => {
-        // A click on the dimmed backdrop lands on the dialog element itself.
-        if (event.target === event.currentTarget) onClose();
-      }}
-      aria-label={pick ? `Meaning of ${pick.word}` : "Word"}
-      className="mx-0 mt-auto mb-0 max-h-[88dvh] w-full max-w-full overflow-y-auto rounded-t-3xl bg-surface-raised p-0 text-ink backdrop:bg-black/60 backdrop:backdrop-blur-sm sm:m-auto sm:max-w-lg sm:rounded-3xl"
-    >
+    <Sheet open={pick !== null} onClose={onClose} label={pick ? `Meaning of ${pick.word}` : "Word"}>
       {pick && <SheetBody key={pick.id} pick={pick} decks={decks} onClose={onClose} onAdded={onAdded} />}
-    </dialog>
+    </Sheet>
   );
 }
 
