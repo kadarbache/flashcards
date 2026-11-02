@@ -82,7 +82,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-dvh font-sans">
         <PwaSetup />
         <header className="sticky top-0 z-30 border-b border-white/5 bg-ground/75 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] py-2.5 sm:px-[max(1.5rem,env(safe-area-inset-left),env(safe-area-inset-right))]">
+          <div className="mx-auto flex max-w-6xl wide:max-w-none items-center justify-between gap-3 px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] py-2.5 sm:px-[max(1.5rem,env(safe-area-inset-left),env(safe-area-inset-right))]">
             <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
               <LogoMark className="h-8 w-8" />
               Flashcards
@@ -90,7 +90,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <SessionControls />
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] pt-6 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] sm:px-[max(1.5rem,env(safe-area-inset-left),env(safe-area-inset-right))] sm:pt-8">
+        <main className="mx-auto max-w-6xl wide:max-w-none px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] pt-6 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] sm:px-[max(1.5rem,env(safe-area-inset-left),env(safe-area-inset-right))] sm:pt-8">
           {children}
         </main>
       </body>

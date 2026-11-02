@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ArrowIcon, PlayIcon } from "@/components/icons";
 import { iconButton } from "@/components/ui";
+import { transcriptPanel, transcriptSlot, videoFrame, watchGrid } from "@/components/watch/layout";
 import { TranscriptUpload } from "@/components/watch/transcript-upload";
 import { useYouTubePlayer } from "@/components/watch/use-youtube-player";
 import { WordSheet, type DeckOption, type WordPick } from "@/components/watch/word-sheet";
@@ -148,103 +149,105 @@ export function WatchSession({
   const title = transcript?.title || (!outcome.ok ? outcome.title : "") || "YouTube video";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-3">
-        <Link href="/watch" className={iconButton} aria-label="Back to videos">
-          <ArrowIcon direction="left" className="h-5 w-5" />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl leading-tight font-extrabold tracking-tight break-words sm:text-2xl">
-            {title}
-          </h1>
-          <p className="text-sm text-ink-muted">Tap any word to see what it means.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start">
-        <div className="space-y-3 lg:sticky lg:top-20">
-          <div className="relative aspect-video overflow-hidden rounded-3xl bg-black">
-            <div ref={containerRef} className="absolute inset-0 [&>iframe]:h-full [&>iframe]:w-full" />
-            {playerError && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-                <p className="font-bold">{playerError}</p>
-                <a
-                  href={`https://www.youtube.com/watch?v=${videoId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm font-bold text-gold hover:underline"
-                >
-                  Open it on YouTube
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <section className="flex flex-col gap-3 rounded-3xl bg-surface-raised" aria-label="Transcript">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
-            <h2 className="text-base font-extrabold">Transcript</h2>
-            {transcript && <span className="text-xs font-bold text-ink-muted">{sourceText(transcript)}</span>}
-          </div>
-
-          {transcript ? (
-            <div className="relative">
-              <ol
-                ref={list}
-                onClick={onTranscriptClick}
-                onWheel={() => setFollow(false)}
-                onTouchMove={() => setFollow(false)}
-                onPointerEnter={(event) => setHovering(event.pointerType === "mouse")}
-                onPointerLeave={() => setHovering(false)}
-                className="relative h-[52dvh] space-y-0.5 overflow-y-auto overscroll-contain px-2 pb-16 lg:h-[calc(100dvh-14rem)]"
+    <>
+      <div data-wide className={watchGrid}>
+        <div className={`${videoFrame} bg-black`}>
+          <div ref={containerRef} className="absolute inset-0 [&>iframe]:h-full [&>iframe]:w-full" />
+          {playerError && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="font-bold">{playerError}</p>
+              <a
+                href={`https://www.youtube.com/watch?v=${videoId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-bold text-gold hover:underline"
               >
-                {lines.map((line, index) => (
-                  <Line
-                    key={index}
-                    index={index}
-                    line={line}
-                    timed={timed}
-                    active={index === active}
-                    known={known}
-                    onSeek={seek}
-                  />
-                ))}
-              </ol>
-              {timed && !follow && (
-                <button
-                  type="button"
-                  onClick={() => setFollow(true)}
-                  className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-gold px-4 py-2 text-sm font-extrabold text-paper-ink shadow-lg active:scale-95"
-                >
-                  <PlayIcon className="h-3.5 w-3.5" />
-                  Follow the video
-                </button>
+                Open it on YouTube
+              </a>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-start gap-3 xl:col-start-1 xl:row-start-2">
+          <Link href="/watch" className={iconButton} aria-label="Back to videos">
+            <ArrowIcon direction="left" className="h-5 w-5" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl leading-tight font-extrabold tracking-tight break-words sm:text-2xl">
+              {title}
+            </h1>
+            <p className="text-sm text-ink-muted">Tap any word to see what it means.</p>
+          </div>
+        </div>
+
+        <div className={transcriptSlot}>
+          <section className={transcriptPanel} aria-label="Transcript">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
+              <h2 className="text-base font-extrabold">Transcript</h2>
+              {transcript && (
+                <span className="text-xs font-bold text-ink-muted">{sourceText(transcript)}</span>
               )}
             </div>
-          ) : (
-            <div className="space-y-4 px-5 pb-5">
-              <p className="text-sm text-ink-muted">
-                {!outcome.ok && failureText(outcome.reason, backupConfigured)}
-              </p>
-              <TranscriptUpload videoId={videoId} onSaved={setTranscript} />
-            </div>
-          )}
 
-          {transcript && (
-            <details className="border-t border-border-subtle px-5 py-3 text-sm">
-              <summary className="cursor-pointer font-bold text-ink-muted">
-                {sourceText(transcript)} · use my own subtitles instead
-              </summary>
-              <div className="pt-3">
+            {transcript ? (
+              <div className="relative xl:min-h-0 xl:flex-1">
+                <ol
+                  ref={list}
+                  onClick={onTranscriptClick}
+                  onWheel={() => setFollow(false)}
+                  onTouchMove={() => setFollow(false)}
+                  onPointerEnter={(event) => setHovering(event.pointerType === "mouse")}
+                  onPointerLeave={() => setHovering(false)}
+                  className="relative h-[52dvh] space-y-0.5 overflow-y-auto overscroll-contain px-2 pb-16 xl:h-full"
+                >
+                  {lines.map((line, index) => (
+                    <Line
+                      key={index}
+                      index={index}
+                      line={line}
+                      timed={timed}
+                      active={index === active}
+                      known={known}
+                      onSeek={seek}
+                    />
+                  ))}
+                </ol>
+                {timed && !follow && (
+                  <button
+                    type="button"
+                    onClick={() => setFollow(true)}
+                    className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-gold px-4 py-2 text-sm font-extrabold text-paper-ink shadow-lg active:scale-95"
+                  >
+                    <PlayIcon className="h-3.5 w-3.5" />
+                    Follow the video
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4 px-5 pb-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+                <p className="text-sm text-ink-muted">
+                  {!outcome.ok && failureText(outcome.reason, backupConfigured)}
+                </p>
                 <TranscriptUpload videoId={videoId} onSaved={setTranscript} />
               </div>
-            </details>
-          )}
-        </section>
+            )}
+
+            {transcript && (
+              <details className="border-t border-border-subtle px-5 py-3 text-sm xl:max-h-[60%] xl:overflow-y-auto">
+                <summary className="cursor-pointer font-bold text-ink-muted">
+                  {sourceText(transcript)} · use my own subtitles instead
+                </summary>
+                <div className="pt-3">
+                  <TranscriptUpload videoId={videoId} onSaved={setTranscript} />
+                </div>
+              </details>
+            )}
+          </section>
+        </div>
       </div>
 
       <WordSheet pick={pick} decks={decks} onClose={close} onAdded={added} />
-    </div>
+    </>
   );
 }
 

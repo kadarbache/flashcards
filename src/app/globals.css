@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 /*
+ * `wide:` applies on a page that marks itself with `data-wide`. The watch
+ * screen does, to drop the usual centred column and use the whole window.
+ */
+@custom-variant wide (&:where(body:has([data-wide]) *));
+
+/*
  * Tokens. The app has one look, a dark "arcade" theme, so there is no light
  * variant to switch to: the game colours are designed against this ground.
  * `@theme` builds the utilities (`bg-surface-raised`, `text-gold`, ...).
