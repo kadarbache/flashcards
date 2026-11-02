@@ -419,6 +419,11 @@ function SwipeCard({
               >
                 {back.text}
               </p>
+              {card.example && (
+                <p className="max-w-prose text-sm leading-snug break-words text-paper-muted italic">
+                  “{card.example}”
+                </p>
+              )}
             </div>
             <p className="flex items-center justify-center gap-2 text-sm font-bold text-paper-muted">
               <ArrowIcon direction="left" className="h-4 w-4" />

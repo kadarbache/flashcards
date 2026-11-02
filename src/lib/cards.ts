@@ -9,6 +9,8 @@ const MAX_FIELD_LENGTH = 2000;
 export interface CardInput {
   front: string;
   back: string;
+  /** A sentence using the word. Optional. */
+  example?: string;
 }
 
 export interface RejectedCard {
@@ -60,7 +62,12 @@ function normalizeCard(value: unknown, index: number): CardInput | RejectedCard 
     return { index, reason: `front and back must be under ${MAX_FIELD_LENGTH} characters` };
   }
 
-  return { front, back };
+  const example = typeof record.example === "string" ? record.example.trim() : "";
+  if (example.length > MAX_FIELD_LENGTH) {
+    return { index, reason: `example must be under ${MAX_FIELD_LENGTH} characters` };
+  }
+
+  return example === "" ? { front, back } : { front, back, example };
 }
 
 function isRejection(value: CardInput | RejectedCard): value is RejectedCard {
@@ -130,6 +137,7 @@ export async function addCardsToDeck(
             deckId: deck._id,
             front: card.front,
             back: card.back,
+            example: card.example ?? "",
           })),
         )
       : [];

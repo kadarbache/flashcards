@@ -59,6 +59,8 @@ const cardSchema = new Schema(
     deckId: { type: Schema.Types.ObjectId, ref: "Deck", required: true, index: true },
     front: { type: String, required: true, trim: true },
     back: { type: String, required: true, trim: true },
+    /** A sentence using the word, e.g. the line of a video it was picked from. Optional. */
+    example: { type: String, default: "", trim: true },
 
     // --- scheduling state, mirroring ReviewState in src/lib/srs/types.ts ---
     state: {

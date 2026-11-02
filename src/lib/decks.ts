@@ -52,6 +52,8 @@ export interface ReviewCardView {
   id: string;
   front: string;
   back: string;
+  /** A sentence using the word; empty when the card has none. */
+  example: string;
   stateLabel: string;
   /** Button labels: what each grade would do to this card. */
   previews: Record<Grade, string>;
@@ -62,6 +64,7 @@ export interface PracticeCard {
   id: string;
   front: string;
   back: string;
+  example: string;
 }
 
 export interface QueueCounts {
@@ -228,13 +231,14 @@ export async function listPracticeCards(deckId: string): Promise<PracticeCard[]>
   if (!id) return [];
 
   await connectToDatabase();
-  const cards = await Card.find({ deckId: id }).select({ front: 1, back: 1 }).lean();
+  const cards = await Card.find({ deckId: id }).select({ front: 1, back: 1, example: 1 }).lean();
 
   return shuffled(
     cards.map((card) => ({
       id: String(card._id),
       front: card.front,
       back: card.back,
+      example: card.example ?? "",
     })),
   );
 }
@@ -344,6 +348,7 @@ export async function getNextCard(
       id: String(next._id),
       front: next.front,
       back: next.back,
+      example: next.example ?? "",
       stateLabel: describeState(next.state as CardState),
       previews: previewIntervals(toReviewState(next), {
         now,
@@ -361,6 +366,7 @@ type StoredCard = {
   _id: unknown;
   front: string;
   back: string;
+  example?: string | null;
   state: string;
   step: number;
   intervalDays: number;

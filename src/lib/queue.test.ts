@@ -423,13 +423,16 @@ describe("practice", () => {
     assert.equal((await getNextCard(deckId)).reviewedToday, 1, "only the real answer counts");
   });
 
-  it("hands over both sides of each card", async () => {
+  it("hands over both sides of each card, and its example", async () => {
     const deckId = await seedDeck(1);
     const [only] = await Card.find({});
 
     assert.deepEqual(await listPracticeCards(deckId), [
-      { id: String(only._id), front: "front 1", back: "back 1" },
+      { id: String(only._id), front: "front 1", back: "back 1", example: "" },
     ]);
+
+    await Card.updateOne({ _id: only._id }, { example: "Front one, in a sentence." });
+    assert.equal((await listPracticeCards(deckId))[0].example, "Front one, in a sentence.");
   });
 
   it("stays inside the deck it was asked for", async () => {

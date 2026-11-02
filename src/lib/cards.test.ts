@@ -340,3 +340,31 @@ describe("POST /api/decks", () => {
     assert.equal((await postDeck(jsonRequest({ name: "x" }, null))).status, 401);
   });
 });
+
+describe("card examples", () => {
+  it("keeps an optional example sentence, and leaves it empty when there is none", async () => {
+    const deckId = await seedDeck();
+    const result = await addCardsToDeck(deckId, [
+      { front: "stranger", back: "(noun) someone you do not know", example: "  We're no strangers to love.  " },
+      { front: "rule", back: "(noun) what you must do" },
+    ]);
+    assert.equal(result.ok && result.added, 2);
+
+    const stored = await Card.find({ deckId }).sort({ front: 1 }).lean();
+    assert.deepEqual(
+      stored.map((card) => [card.front, card.example]),
+      [
+        ["rule", ""],
+        ["stranger", "We're no strangers to love."],
+      ],
+    );
+  });
+
+  it("rejects an example that is absurdly long", async () => {
+    const deckId = await seedDeck();
+    const result = await addCardsToDeck(deckId, [{ front: "a", back: "b", example: "x".repeat(2001) }]);
+    assert.ok(result.ok);
+    assert.equal(result.added, 0);
+    assert.match(result.rejected[0].reason, /example/);
+  });
+});
