@@ -6,6 +6,15 @@
  */
 @custom-variant wide (&:where(body:has([data-wide]) *));
 
+/* `tabbar:` applies while the phone tab bar is on the page, to keep content clear of it. */
+@custom-variant tabbar (&:where(body:has([data-tabbar]) *));
+
+/*
+ * `typing:` applies while a text field has the focus. On a phone the keyboard
+ * is up then, and the tab bar steps out of its way.
+ */
+@custom-variant typing (&:where(body:has(input:focus:not([type="checkbox"], [type="radio"], [type="range"]), textarea:focus) *));
+
 /*
  * Tokens. The app has one look, a dark "arcade" theme, so there is no light
  * variant to switch to: the game colours are designed against this ground.

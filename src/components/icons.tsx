@@ -368,3 +368,13 @@ export function AlbumIcon({ className }: IconProps) {
     </Line>
   );
 }
+
+/** A person, for the "More" tab on phones: your album, sound and signing out. */
+export function UserIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" />
+    </Line>
+  );
+}

@@ -368,7 +368,7 @@ export function ReviewSession({
         <div
           key={`toast-${toast.id}`}
           role="status"
-          className="anim-pop-in pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.5rem)] z-40 mx-auto w-fit max-w-[calc(100%-2rem)] origin-top rounded-2xl bg-gold px-5 py-3 text-center text-paper-ink shadow-[0_12px_30px_-8px_rgba(0,0,0,.6)] lg:right-auto lg:left-6 lg:mx-0 lg:max-w-sm lg:origin-top-left lg:text-left"
+          className="anim-pop-in pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+1rem)] z-40 md:top-[calc(env(safe-area-inset-top)+4.5rem)] mx-auto w-fit max-w-[calc(100%-2rem)] origin-top rounded-2xl bg-gold px-5 py-3 text-center text-paper-ink shadow-[0_12px_30px_-8px_rgba(0,0,0,.6)] lg:right-auto lg:left-6 lg:mx-0 lg:max-w-sm lg:origin-top-left lg:text-left"
         >
           <p className="text-lg leading-tight font-extrabold">{toast.title}</p>
           <p className="text-sm font-semibold">{toast.detail}</p>
