@@ -79,6 +79,9 @@ src/lib/
   collection.ts       Bronze/Silver/Gold ranks from a card's interval (pure)
   reminders.ts        evening reminder wording and timing (pure); -db.ts sends
   import.ts           pasted text -> cards (pure)
+  transcript.ts       links, caption files, sentences, clickable words (pure)
+  transcript-sources.ts  YouTube and Supadata; transcripts-db.ts saves and serves
+  dictionary.ts       word lookups: Free Dictionary, then Wiktionary
   db/                 Mongoose connection and models
 src/app/
   actions.ts          Server Actions (thin wrappers over lib/)
@@ -90,6 +93,7 @@ src/app/
   decks/[id]/blitz/   timed multiple choice, outside the scheduler
   word/               Word of the Day, one learned word a day
   collection/         the album: every word with its medal
+  watch/              a YouTube video with its transcript; tap words to keep them
   api/cron/reminders/ the evening reminder job, called by Vercel Cron
   manifest.ts, icons/ what makes the app installable
 ```
@@ -216,6 +220,45 @@ off its schedule, so nothing extra is stored:
 Answering Good and Easy moves words up on their own. Again resets the interval,
 so a lapsed word drops back to Bronze. When an answer earns a new medal, the
 review screen says so.
+
+## Watch & learn
+
+`/watch` plays a YouTube video with its transcript beside it. The line being
+spoken is highlighted and kept in view; tap a line's time to jump there. Tap a
+word (or select a short phrase like "give up") and a sheet opens with what it
+means. Pick the definition that fits, choose a deck, and **Add to deck**. The
+card gets the word on the front, the meaning on the back, and the line from the
+video as an **example**, which shows under the answer in review and practice.
+The video pauses while the sheet is open and carries on when it closes. Words
+already on a card are underlined in the transcript.
+
+**The player** is YouTube's official IFrame Player API: free, no key.
+
+**Transcripts** are the hard part, because YouTube has no public API for other
+people's captions. They come from, in order:
+
+1. **The saved copy.** Every transcript is stored in MongoDB (`transcripts`,
+   one row per video, plus one for your own subtitles if you upload them) the
+   first time, so YouTube is asked once per video.
+2. **YouTube directly**, free: the same request YouTube's Android app makes,
+   then the caption file it links to. Not a documented API, so it can break
+   when YouTube changes things. It works from a home connection, but YouTube
+   refuses most cloud servers, Vercel included.
+3. **Supadata**, a paid service, only when `SUPADATA_API_KEY` is set. It is
+   asked only when step 2 was refused or failed, never for a video that simply
+   has no captions.
+4. **Your own subtitles.** Upload an `.srt` or `.vtt` file, or paste text. It
+   replaces YouTube's for that video. Plain text works too, just without times.
+
+Caption fragments are re-cut into whole sentences, since a sentence is what
+ends up on the card. A video with several caption tracks shows its English one
+(written by a person if there is one), otherwise the best of what it has.
+
+**Meanings** come from the Free Dictionary API (dictionaryapi.dev), with
+Wiktionary as the fallback when it is down or has nothing, both free and
+keyless. English only. A clicked "running" or "cities" finds "run" and "city".
+When the Free Dictionary fails, the app skips it for five minutes rather than
+waiting on its timeout with every click.
 
 ## Evening reminder
 
