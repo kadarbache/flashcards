@@ -363,6 +363,18 @@ export function ReviewSession({
 
       <Confetti fire={confetti} />
 
+      {/* Just under the header: centred on a phone, in the top-left corner on a wide screen. */}
+      {toast && (
+        <div
+          key={`toast-${toast.id}`}
+          role="status"
+          className="anim-pop-in pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.5rem)] z-40 mx-auto w-fit max-w-[calc(100%-2rem)] origin-top rounded-2xl bg-gold px-5 py-3 text-center text-paper-ink shadow-[0_12px_30px_-8px_rgba(0,0,0,.6)] lg:right-auto lg:left-6 lg:mx-0 lg:max-w-sm lg:origin-top-left lg:text-left"
+        >
+          <p className="text-lg leading-tight font-extrabold">{toast.title}</p>
+          <p className="text-sm font-semibold">{toast.detail}</p>
+        </div>
+      )}
+
       {!card ? (
         <RoundClear
           deckId={deckId}
@@ -428,16 +440,6 @@ export function ReviewSession({
               />
 
               <Floats items={floats} />
-              {toast && (
-                <div
-                  key={`toast-${toast.id}`}
-                  role="status"
-                  className="anim-pop-in pointer-events-none absolute inset-x-0 top-5 z-40 mx-auto w-fit max-w-[90%] rounded-2xl bg-gold px-5 py-3 text-center text-paper-ink shadow-[0_12px_30px_-8px_rgba(0,0,0,.6)]"
-                >
-                  <p className="text-lg leading-tight font-extrabold">{toast.title}</p>
-                  <p className="text-sm font-semibold">{toast.detail}</p>
-                </div>
-              )}
             </div>
 
             {flipped ? (
