@@ -15,6 +15,7 @@ import {
   StarIcon,
   SunIcon,
   SwapIcon,
+  VideoIcon,
 } from "@/components/icons";
 import { InstallCard } from "@/components/pwa";
 import { ReminderCard } from "@/components/reminder-card";
@@ -152,9 +153,10 @@ export default async function Home() {
         </section>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <WordTile word={word} />
         <CollectionTile counts={collection} />
+        <WatchTile />
       </div>
 
       <ReminderCard
@@ -197,6 +199,33 @@ export default async function Home() {
         <DeckForm />
       </section>
     </div>
+  );
+}
+
+/** The way into watching videos with their transcripts. */
+function WatchTile() {
+  return (
+    <Link
+      href="/watch"
+      className="anim-rise group flex items-center gap-4 rounded-3xl bg-surface-raised p-4 transition hover:bg-surface-high active:scale-[0.99] md:col-span-2 sm:p-5 xl:col-span-1"
+    >
+      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface-high text-again">
+        <VideoIcon className="h-8 w-8" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-extrabold tracking-wide text-gold uppercase">
+          Watch &amp; learn
+        </span>
+        <span className="block truncate text-lg font-extrabold">Find new words in a video</span>
+        <span className="mt-0.5 block truncate text-sm text-ink-muted">
+          Tap a word in the transcript to add it to a deck
+        </span>
+      </span>
+      <ChevronIcon
+        direction="right"
+        className="h-5 w-5 shrink-0 text-ink-muted transition group-hover:translate-x-0.5"
+      />
+    </Link>
   );
 }
 

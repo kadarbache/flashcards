@@ -165,7 +165,37 @@ const pushDeviceSchema = new Schema(
   { timestamps: true },
 );
 
+/**
+ * A video's transcript, saved the first time it is opened so YouTube is asked
+ * once per video, not on every visit. A video has one row for YouTube's
+ * captions and, if someone uploads their own, a second under the language
+ * "custom".
+ */
+const transcriptSchema = new Schema(
+  {
+    videoId: { type: String, required: true },
+    lang: { type: String, required: true },
+    languageName: { type: String, default: "" },
+    /** YouTube's auto-generated captions, rather than ones a person wrote. */
+    auto: { type: Boolean, default: false },
+    title: { type: String, default: "" },
+    source: { type: String, enum: ["youtube", "supadata", "upload"], required: true },
+    /** False for pasted plain text, which has no times to follow the video by. */
+    timed: { type: Boolean, default: true },
+    lines: {
+      type: [{ _id: false, start: { type: Number, required: true }, text: { type: String, required: true } }],
+      default: [],
+    },
+  },
+  { timestamps: true },
+);
+
+transcriptSchema.index({ videoId: 1, lang: 1 }, { unique: true });
+// The "recently watched" list.
+transcriptSchema.index({ updatedAt: -1 });
+
 export type DeckDocument = InferSchemaType<typeof deckSchema>;
+export type TranscriptDocument = InferSchemaType<typeof transcriptSchema>;
 export type DailyWordDocument = InferSchemaType<typeof dailyWordSchema>;
 export type PushDeviceDocument = InferSchemaType<typeof pushDeviceSchema>;
 export type ProfileDocument = InferSchemaType<typeof profileSchema>;
@@ -213,3 +243,7 @@ export const DailyWord: Model<DailyWordDocument> =
 dropStaleModel("PushDevice");
 export const PushDevice: Model<PushDeviceDocument> =
   (models.PushDevice as Model<PushDeviceDocument>) || model("PushDevice", pushDeviceSchema);
+
+dropStaleModel("Transcript");
+export const Transcript: Model<TranscriptDocument> =
+  (models.Transcript as Model<TranscriptDocument>) || model("Transcript", transcriptSchema);

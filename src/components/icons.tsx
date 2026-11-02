@@ -327,6 +327,26 @@ export function MedalIcon({
   );
 }
 
+/** A screen with a play button, for watching videos. */
+export function VideoIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <rect x="2.5" y="4.5" width="19" height="15" rx="3.5" />
+      <path d="M10 9.2v5.6l4.8-2.8L10 9.2z" />
+    </Line>
+  );
+}
+
+/** A speaker, for hearing a word said. */
+export function SpeakIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4v-5z" />
+      <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+    </Line>
+  );
+}
+
 /** A bell, for reminders. */
 export function BellIcon({ className }: IconProps) {
   return (
