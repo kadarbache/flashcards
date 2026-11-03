@@ -105,6 +105,16 @@ export function previousDay(day: string): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** "2026-10-31" -> "Sat 31 Oct". `weekday: "long"` gives "Saturday 31 Oct". */
+export function formatDay(day: string, weekday: "short" | "long" = "short"): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday,
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(parseDay(day));
+}
+
 /** "M", "T", "W"... for a YYYY-MM-DD day. */
 export function weekdayLetter(day: string): string {
   return "SMTWTFS"[parseDay(day).getUTCDay()];

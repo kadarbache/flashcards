@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { answerDailyWord } from "@/app/actions";
 import { buzz, Confetti } from "@/components/game/effects";
+import { JudgeButtons, JudgeCard } from "@/components/game/judge-card";
 import { play } from "@/components/game/sound";
-import { SWIPE_SURFACE, useSwipe, type Direction, type SwipeFrame } from "@/components/game/use-swipe";
 import {
   ArrowIcon,
   CheckIcon,
@@ -16,19 +16,19 @@ import {
   HomeIcon,
   SunIcon,
 } from "@/components/icons";
-import { cardSpeaker, SpeakerButton } from "@/components/speaker";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
-import { optionText, splitLabel } from "@/lib/blitz";
+import { optionText } from "@/lib/blitz";
+import { formatDay } from "@/lib/game";
 import type { WordRecord, WordResult } from "@/lib/word-of-the-day";
 import type { DailyWordView, WordOfTheDay } from "@/lib/word-of-the-day-db";
 
-const SWIPE_THRESHOLD = 100;
-
-/** Swipe right if you knew it, left if you did not -- the same sides as Good and Again. */
-const STAMPS: { direction: Direction; result: WordResult; label: string; color: string; place: string }[] = [
-  { direction: "right", result: "knew", label: "Knew it", color: "#0B8A5A", place: "top-14 left-5 -rotate-12" },
-  { direction: "left", result: "missed", label: "Missed", color: "#D42F4F", place: "top-14 right-5 rotate-12" },
-];
+/** The pill on the card's corner. */
+const BADGE = (
+  <span className="flex items-center gap-1.5 rounded-full bg-[#fff1c2] px-2.5 py-1 text-[#8a5a00]">
+    <SunIcon className="h-3.5 w-3.5" />
+    Word of the Day
+  </span>
+);
 
 /**
  * Word of the Day: one learned word, once a day. Read the word, try to recall
@@ -142,8 +142,13 @@ export function WordOfTheDaySession({
 
       {word ? (
         <>
-          <WordCard
-            word={word}
+          <JudgeCard
+            label="Word of the day"
+            front={word.front}
+            back={word.back}
+            deckName={word.deckName}
+            badge={BADGE}
+            question="Do you know this word?"
             flipped={flipped}
             result={result}
             onFlip={flip}
@@ -162,29 +167,11 @@ export function WordOfTheDaySession({
           )}
 
           {!result && flipped && (
-            <div className="space-y-2">
-              <p className="text-center text-sm font-bold text-ink-muted">Did you know it? Be honest.</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => void answer("missed")}
-                  disabled={saving}
-                  className="inline-flex min-h-16 items-center justify-center gap-2 rounded-2xl bg-again text-lg font-extrabold text-paper-ink transition active:scale-[0.97] disabled:opacity-50"
-                >
-                  <CloseIcon className="h-5 w-5" />
-                  Missed it
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void answer("knew")}
-                  disabled={saving}
-                  className="inline-flex min-h-16 items-center justify-center gap-2 rounded-2xl bg-good text-lg font-extrabold text-paper-ink transition active:scale-[0.97] disabled:opacity-50"
-                >
-                  <CheckIcon className="h-5 w-5" />
-                  Knew it
-                </button>
-              </div>
-            </div>
+            <JudgeButtons
+              prompt="Did you know it? Be honest."
+              disabled={saving}
+              onAnswer={(choice) => void answer(choice)}
+            />
           )}
 
           {error && <p className="text-center text-sm font-bold text-again">{error}</p>}
@@ -211,176 +198,6 @@ export function WordOfTheDaySession({
       <RecordPanel record={record} />
 
       {data.history.length > 0 && <History words={data.history} />}
-    </div>
-  );
-}
-
-function WordCard({
-  word,
-  flipped,
-  result,
-  onFlip,
-  onAnswer,
-  aiVoice,
-}: {
-  word: DailyWordView;
-  flipped: boolean;
-  result: WordResult | null;
-  onFlip: () => void;
-  onAnswer: (result: WordResult) => void;
-  aiVoice: boolean;
-}) {
-  const element = useRef<HTMLDivElement>(null);
-  const stamps = useRef<Partial<Record<Direction, HTMLDivElement | null>>>({});
-
-  function paintStamps(frame: SwipeFrame) {
-    for (const stamp of STAMPS) {
-      const node = stamps.current[stamp.direction];
-      if (!node) continue;
-      const on = stamp.direction === frame.direction;
-      node.style.opacity = on ? String(Math.min(1, frame.progress * 1.4)) : "0";
-    }
-  }
-
-  const canAnswer = flipped && result === null;
-  const { handlers, springBack } = useSwipe(element, {
-    axis: "x",
-    threshold: SWIPE_THRESHOLD,
-    canSwipe: canAnswer,
-    locked: result !== null,
-    onTap: onFlip,
-    onFrame: paintStamps,
-    onSwipe: (direction) => {
-      // The card is the only one today, so it comes home after the answer.
-      paintStamps({ dx: 0, dy: 0, direction: null, progress: 0 });
-      springBack();
-      const stamp = STAMPS.find((entry) => entry.direction === direction);
-      if (stamp) onAnswer(stamp.result);
-    },
-  });
-
-  const back = splitLabel(word.back);
-  const ring =
-    result === "knew"
-      ? "ring-4 ring-good"
-      : result === "missed"
-        ? "ring-4 ring-again"
-        : "";
-
-  return (
-    <div className="relative h-[clamp(17rem,calc(100dvh-26rem),24rem)]">
-      <div
-        ref={element}
-        {...handlers}
-        className={`anim-card-in absolute inset-0 ${result ? "" : "cursor-grab active:cursor-grabbing"} ${SWIPE_SURFACE}`}
-        role="group"
-        aria-roledescription="flashcard"
-        aria-label={flipped ? `Answer: ${word.back}` : `Word of the day: ${word.front}`}
-      >
-        <div className="h-full [perspective:1400px]">
-          <div
-            className={`relative h-full transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:duration-0 ${
-              flipped ? "[transform:rotateY(180deg)]" : ""
-            }`}
-          >
-            <Face hidden={flipped}>
-              <CardTop deckName={word.deckName} />
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-2 py-4 text-center">
-                <p className="text-sm font-extrabold tracking-wide text-paper-muted uppercase">
-                  Do you know this word?
-                </p>
-                <p className="text-[clamp(2rem,8vw,3rem)] leading-tight font-extrabold tracking-tight break-words">
-                  {word.front}
-                </p>
-              </div>
-              <p className="flex items-center justify-center gap-1.5 text-sm font-bold text-paper-muted">
-                <FlipIcon className="h-4 w-4" />
-                Say it in your head, then tap to flip
-              </p>
-            </Face>
-
-            <Face back hidden={!flipped} ring={ring}>
-              <CardTop deckName={word.deckName} />
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-2 py-4 text-center">
-                <div className="flex max-w-full items-center justify-center gap-2">
-                  <p className="min-w-0 text-lg font-extrabold break-words">{word.front}</p>
-                  <SpeakerButton text={word.front} aiVoice={aiVoice} className={cardSpeaker} />
-                </div>
-                <span className="h-1 w-10 rounded-full bg-[#e4dcfd]" aria-hidden="true" />
-                {back.label && (
-                  <span className="rounded-full bg-[#efeafe] px-2.5 py-0.5 text-xs font-extrabold text-[#5b4bb0]">
-                    {back.label}
-                  </span>
-                )}
-                <p
-                  className={`leading-snug font-bold break-words whitespace-pre-wrap ${
-                    back.text.length > 160 ? "text-base" : back.text.length > 80 ? "text-lg" : "text-2xl"
-                  }`}
-                >
-                  {back.text}
-                </p>
-              </div>
-              {result === null && (
-                <p className="flex items-center justify-center gap-2 text-sm font-bold text-paper-muted">
-                  <ArrowIcon direction="left" className="h-4 w-4" />
-                  Missed · Knew it
-                  <ArrowIcon direction="right" className="h-4 w-4" />
-                </p>
-              )}
-            </Face>
-          </div>
-        </div>
-
-        {STAMPS.map((stamp) => (
-          <div
-            key={stamp.direction}
-            ref={(node) => {
-              stamps.current[stamp.direction] = node;
-            }}
-            aria-hidden="true"
-            className={`pointer-events-none absolute z-10 rounded-2xl border-[5px] bg-paper/90 px-3.5 py-1.5 opacity-0 ${stamp.place}`}
-            style={{ borderColor: stamp.color, color: stamp.color }}
-          >
-            <p className="text-[1.6rem] leading-none font-black tracking-wide uppercase">{stamp.label}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** One side of the card. The side facing away is `hidden`: inert, so its buttons cannot be reached. */
-function Face({
-  back = false,
-  hidden = false,
-  ring = "",
-  children,
-}: {
-  back?: boolean;
-  hidden?: boolean;
-  ring?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      inert={hidden}
-      className={`absolute inset-0 flex flex-col rounded-[28px] bg-paper p-5 text-paper-ink shadow-[0_28px_60px_-24px_rgba(0,0,0,.75)] [backface-visibility:hidden] sm:p-6 ${ring} ${
-        back ? "[transform:rotateY(180deg)]" : ""
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function CardTop({ deckName }: { deckName: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs font-extrabold">
-      <span className="flex items-center gap-1.5 rounded-full bg-[#fff1c2] px-2.5 py-1 text-[#8a5a00]">
-        <SunIcon className="h-3.5 w-3.5" />
-        Word of the Day
-      </span>
-      {deckName && <span className="ml-auto truncate text-paper-muted">{deckName}</span>}
     </div>
   );
 }
@@ -503,15 +320,4 @@ function History({ words }: { words: DailyWordView[] }) {
       </Link>
     </section>
   );
-}
-
-/** "2026-10-31" -> "Sat 31 Oct". The key is already a calendar day, so read it as UTC. */
-function formatDay(day: string): string {
-  const [year, month, date] = day.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, date)));
 }
