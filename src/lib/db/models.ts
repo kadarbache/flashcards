@@ -194,8 +194,25 @@ transcriptSchema.index({ videoId: 1, lang: 1 }, { unique: true });
 // The "recently watched" list.
 transcriptSchema.index({ updatedAt: -1 });
 
+/**
+ * A word read aloud by the AI voice, kept so each word is made once: the
+ * voice is slow to answer and its free allowance is small, and a saved clip
+ * plays at once on any device. A short WAV, a few tens of kilobytes.
+ */
+const pronunciationSchema = new Schema(
+  {
+    text: { type: String, required: true },
+    voice: { type: String, required: true },
+    audio: { type: Buffer, required: true },
+  },
+  { timestamps: true },
+);
+
+pronunciationSchema.index({ text: 1, voice: 1 }, { unique: true });
+
 export type DeckDocument = InferSchemaType<typeof deckSchema>;
 export type TranscriptDocument = InferSchemaType<typeof transcriptSchema>;
+export type PronunciationDocument = InferSchemaType<typeof pronunciationSchema>;
 export type DailyWordDocument = InferSchemaType<typeof dailyWordSchema>;
 export type PushDeviceDocument = InferSchemaType<typeof pushDeviceSchema>;
 export type ProfileDocument = InferSchemaType<typeof profileSchema>;
@@ -247,3 +264,7 @@ export const PushDevice: Model<PushDeviceDocument> =
 dropStaleModel("Transcript");
 export const Transcript: Model<TranscriptDocument> =
   (models.Transcript as Model<TranscriptDocument>) || model("Transcript", transcriptSchema);
+
+dropStaleModel("Pronunciation");
+export const Pronunciation: Model<PronunciationDocument> =
+  (models.Pronunciation as Model<PronunciationDocument>) || model("Pronunciation", pronunciationSchema);

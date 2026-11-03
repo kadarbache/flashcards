@@ -53,6 +53,7 @@ export function WatchSession({
   outcome,
   decks,
   savedCards,
+  aiVoice,
   backupConfigured,
 }: {
   videoId: string;
@@ -60,6 +61,8 @@ export function WatchSession({
   outcome: TranscriptOutcome;
   decks: DeckOption[];
   savedCards: SavedCard[];
+  /** GEMINI_API_KEY is set, so words can be read aloud by the AI voice. */
+  aiVoice: boolean;
   backupConfigured: boolean;
 }) {
   const [transcript, setTranscript] = useState<TranscriptView | null>(outcome.ok ? outcome.transcript : null);
@@ -257,6 +260,7 @@ export function WatchSession({
         pick={pick}
         decks={decks}
         saved={saved}
+        aiVoice={aiVoice}
         onClose={close}
         onAdded={added}
         onRemoved={removed}

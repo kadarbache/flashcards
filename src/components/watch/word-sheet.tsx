@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { addWordToDeck, defineWord, removeWordFromDeck } from "@/app/watch/actions";
 import { play } from "@/components/game/sound";
@@ -125,6 +125,7 @@ export function WordSheet({
   pick,
   decks,
   saved,
+  aiVoice,
   onClose,
   onAdded,
   onRemoved,
@@ -133,6 +134,8 @@ export function WordSheet({
   decks: DeckOption[];
   /** Every card in every deck, to tell whether the word is saved already. */
   saved: SavedCard[];
+  /** Read words aloud with the AI voice, falling back to the device's. */
+  aiVoice: boolean;
   onClose: () => void;
   onAdded: (card: SavedCard) => void;
   onRemoved: (cardId: string) => void;
@@ -145,6 +148,7 @@ export function WordSheet({
           pick={pick}
           decks={decks}
           saved={saved}
+          aiVoice={aiVoice}
           onClose={onClose}
           onAdded={onAdded}
           onRemoved={onRemoved}
@@ -158,6 +162,7 @@ function SheetBody({
   pick,
   decks,
   saved,
+  aiVoice,
   onClose,
   onAdded,
   onRemoved,
@@ -165,6 +170,7 @@ function SheetBody({
   pick: WordPick;
   decks: DeckOption[];
   saved: SavedCard[];
+  aiVoice: boolean;
   onClose: () => void;
   onAdded: (card: SavedCard) => void;
   onRemoved: (cardId: string) => void;
@@ -179,10 +185,56 @@ function SheetBody({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const clip = useRef<HTMLAudioElement | null>(null);
+
   // Start the voice list loading now, so the best voice is known by the time the speaker is tapped.
+  // A clip still loading when the sheet closes is stopped, so it does not speak over the video.
   useEffect(() => {
     deviceVoices();
+    return () => {
+      clip.current?.pause();
+      clip.current = null;
+    };
   }, []);
+
+  /**
+   * The AI voice's clip for the word, made on the first tap (a few seconds)
+   * and saved, so every later tap plays at once. When there is no clip --
+   * no key, the free allowance used up, Google down -- the device speaks.
+   * The clip is started inside the tap itself, which phones insist on.
+   */
+  function hear(entry: DictionaryEntry) {
+    if (!aiVoice) {
+      pronounce(entry);
+      return;
+    }
+    clip.current?.pause();
+    const audio = new Audio(`/api/speech?text=${encodeURIComponent(entry.word)}`);
+    clip.current = audio;
+
+    let settled = false;
+    const settle = (played: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      // A newer tap, or a closed sheet, owns the speaker now.
+      if (clip.current !== audio) return;
+      setVoiceLoading(false);
+      if (!played) {
+        clip.current = null;
+        pronounce(entry);
+      }
+    };
+    const timer = window.setTimeout(() => {
+      audio.pause();
+      settle(false);
+    }, 10_000);
+    audio.addEventListener("playing", () => settle(true), { once: true });
+    audio.addEventListener("error", () => settle(false), { once: true });
+    setVoiceLoading(true);
+    audio.play().catch(() => settle(false));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -272,14 +324,16 @@ function SheetBody({
           <h2 className="text-3xl font-extrabold tracking-tight break-words">{entry?.word ?? pick.word}</h2>
           {entry?.phonetic && <p className="text-ink-muted">{entry.phonetic}</p>}
         </div>
-        {entry && (entry.audio || canSpeak()) && (
+        {entry && (aiVoice || entry.audio || canSpeak()) && (
           <button
             type="button"
             className={iconButton}
             aria-label={`Hear “${entry.word}”`}
-            onClick={() => pronounce(entry)}
+            aria-busy={voiceLoading}
+            disabled={voiceLoading}
+            onClick={() => hear(entry)}
           >
-            <SpeakIcon className="h-5 w-5" />
+            <SpeakIcon className={`h-5 w-5 ${voiceLoading ? "animate-pulse text-gold" : ""}`} />
           </button>
         )}
         <button type="button" className={iconButton} aria-label="Close" onClick={onClose}>

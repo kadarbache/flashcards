@@ -79,6 +79,7 @@ export default async function WatchPage({ searchParams }: PageProps<"/watch">) {
       outcome={outcome}
       decks={decks}
       savedCards={savedCards}
+      aiVoice={Boolean(process.env.GEMINI_API_KEY)}
       backupConfigured={Boolean(process.env.SUPADATA_API_KEY)}
     />
   );
