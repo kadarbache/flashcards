@@ -182,7 +182,7 @@ const bossSchema = new Schema(
   { timestamps: true },
 );
 
-// The trophy case: bosses by the day they were beaten.
+// The trophy case and the weekly recap: bosses by the day they were beaten.
 bossSchema.index({ defeatedOn: -1 });
 
 /**

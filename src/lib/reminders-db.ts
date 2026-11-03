@@ -3,7 +3,7 @@ import webpush from "web-push";
 import { getBossScreen } from "@/lib/boss-db";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Profile, PushDevice } from "@/lib/db/models";
-import { dayKey, safeTimeZone } from "@/lib/game";
+import { dayKey, isSunday, safeTimeZone } from "@/lib/game";
 import {
   hoursUntilMidnight,
   reminderMessage,
@@ -158,6 +158,7 @@ export async function runReminders(now: Date = new Date(), send: Sender = webPus
       todayDone: player.todayDone,
       wordWaiting: word.today !== null && word.today.result === null,
       bossWaiting: fight !== undefined && fight.canFight && fight.winnable,
+      recapReady: isSunday(today),
     },
     hoursUntilMidnight(now, timeZone),
   );

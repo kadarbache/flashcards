@@ -6,6 +6,7 @@ import { GoalStepper } from "@/components/goal-stepper";
 import {
   BoltIcon,
   BossIcon,
+  ChartIcon,
   CheckIcon,
   ChevronIcon,
   FlameIcon,
@@ -31,7 +32,7 @@ import { requestTimeZone } from "@/lib/request-time-zone";
 import { getPlayerStats, type PlayerStats } from "@/lib/stats";
 import type { TierCounts } from "@/lib/collection";
 import { getCollectionCounts } from "@/lib/collection-db";
-import { formatDay } from "@/lib/game";
+import { formatDay, isSunday, weekStart } from "@/lib/game";
 import { localReminderTime } from "@/lib/reminders";
 import { vapidKeys } from "@/lib/reminders-db";
 import { getWordOfTheDay, type WordOfTheDay } from "@/lib/word-of-the-day-db";
@@ -163,6 +164,7 @@ export default async function Home() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <WordTile word={word} />
         <BossTile screen={boss} />
+        <RecapTile today={boss.today} week={player.week} />
         <CollectionTile counts={collection} />
         <WatchTile />
       </div>
@@ -215,7 +217,7 @@ function WatchTile() {
   return (
     <Link
       href="/watch"
-      className="anim-rise group flex items-center gap-4 rounded-3xl bg-surface-raised p-4 transition hover:bg-surface-high active:scale-[0.99] sm:p-5 xl:col-span-3"
+      className="anim-rise group flex items-center gap-4 rounded-3xl bg-surface-raised p-4 transition hover:bg-surface-high active:scale-[0.99] md:col-span-2 sm:p-5"
     >
       <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface-high text-again">
         <VideoIcon className="h-8 w-8" />
@@ -290,6 +292,42 @@ function BossTile({ screen }: { screen: BossScreen }) {
               {trophies.length}
             </span>
           )}
+        </span>
+      </span>
+      <ChevronIcon direction="right" className="h-5 w-5 shrink-0 text-ink-muted transition group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
+/** The way into the weekly recap. On Sundays the week is ready, and the tile says so. */
+function RecapTile({ today, week }: { today: string; week: PlayerStats["week"] }) {
+  const sunday = isSunday(today);
+  const monday = weekStart(today);
+  const soFar = week.filter((day) => day.day >= monday).reduce((sum, day) => sum + day.count, 0);
+
+  return (
+    <Link
+      href="/recap"
+      className={`anim-rise group flex items-center gap-4 rounded-3xl border p-4 transition active:scale-[0.99] sm:p-5 ${
+        sunday
+          ? "border-[#2d4a7a] bg-[#101c33] hover:bg-[#13213b]"
+          : "border-transparent bg-surface-raised hover:bg-surface-high"
+      }`}
+    >
+      <span
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+          sunday ? "anim-pulse bg-easy text-paper-ink" : "bg-surface-high text-easy"
+        }`}
+      >
+        <ChartIcon className="h-8 w-8" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-extrabold tracking-wide text-easy uppercase">Your week</span>
+        <span className="block truncate text-lg font-extrabold">
+          {sunday ? "Your week in words is ready" : "See how last week went"}
+        </span>
+        <span className="mt-0.5 block truncate text-sm text-ink-muted tabular-nums">
+          {soFar} {soFar === 1 ? "card" : "cards"} this week so far
         </span>
       </span>
       <ChevronIcon direction="right" className="h-5 w-5 shrink-0 text-ink-muted transition group-hover:translate-x-0.5" />

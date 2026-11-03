@@ -77,6 +77,7 @@ src/lib/
   blitz.ts            Blitz questions built from a deck's own cards (pure)
   word-of-the-day.ts  Word of the Day record and streak (pure); -db.ts picks and saves
   boss.ts             boss words: hearts, fights and picking (pure); -db.ts saves
+  recap.ts            the weekly recap's sums (pure); -db.ts reads a week, -image.tsx draws it
   collection.ts       Bronze/Silver/Gold ranks from a card's interval (pure)
   reminders.ts        evening reminder wording and timing (pure); -db.ts sends
   import.ts           pasted text -> cards (pure)
@@ -98,6 +99,7 @@ src/app/
   decks/[id]/blitz/   timed multiple choice, outside the scheduler
   word/               Word of the Day, one learned word a day
   boss/               the boss fight: a word you keep forgetting, back for a week
+  recap/              your week, Monday to Sunday; recap/image is the picture to share
   collection/         the album: every word with its medal
   watch/              a YouTube video with its transcript; tap words to keep them
   api/cron/reminders/ the evening reminder job, called by Vercel Cron
@@ -232,6 +234,28 @@ boss only comes back if it lapses again after being chosen. Its 150 XP is
 stored on the row and added to the answers' XP, the same way an answer's XP
 lives on its history row.
 
+## Weekly recap
+
+`/recap` adds up a week, Monday to Sunday: cards answered against the week
+before (for the week still going, against the week before up to the same
+moment), XP (bosses included), days on goal and the streak, words learned
+(cards that graduated), new silver and gold medals, the best combo, minutes on
+cards (each card counts a minute at most), words added, videos watched, Word of
+the Day, bosses beaten, and the hardest word answered right that week.
+
+Nothing is stored for it: it is all read back from the history, so any past
+week can be shown and the arrows step between them. On a Sunday it shows the
+week ending that day; the rest of the week, the last full one. The best combo
+is worked out again from the answer times, with the same 20-second rule, and
+days are cut on your time zone like the streak.
+
+**Make a picture to share** draws the week as a 1080 × 1350 PNG
+(`/recap/image?week=YYYY-MM-DD`, behind the sign-in) with `next/og`, in the
+app's own typeface, Bricolage Grotesque, fetched from Google Fonts once per
+server; when Google cannot be reached it falls back to the plain built-in font.
+The picture is made first and shown, then shared or saved with a second tap,
+because phones only open the share sheet straight from a tap.
+
 ## Collection
 
 Every card has a slot in the album at `/collection` and a medal read straight
@@ -324,7 +348,8 @@ Turn it on from the home screen, per device. Once a day the job at
 `/api/cron/reminders` checks today: if the daily goal is not met, today's word
 is still waiting, or a boss that can still be beaten has not been fought, every
 device gets one notification ("Your 12-day streak ends in 3 hours"), in that
-order of importance. A day that is already done gets nothing.
+order of importance. On a Sunday that is otherwise done, it brings the week's
+recap. Any other day that is already done gets nothing.
 
 It needs three environment variables, made by:
 

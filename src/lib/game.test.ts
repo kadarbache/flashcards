@@ -7,6 +7,7 @@ import {
   COMBO_PAUSE_MS,
   dayKey,
   daysBetween,
+  isSunday,
   lastSevenDays,
   levelFromXp,
   multiplierFor,
@@ -14,6 +15,7 @@ import {
   previousDay,
   safeTimeZone,
   streakFrom,
+  weekStart,
   xpFor,
   xpForLevel,
 } from "@/lib/game";
@@ -82,6 +84,15 @@ describe("days", () => {
     assert.equal(addDays("2026-11-03", -7), "2026-10-27");
     assert.equal(daysBetween("2026-10-30", "2026-11-02"), 3);
     assert.equal(daysBetween("2026-11-02", "2026-10-30"), -3);
+  });
+
+  it("starts weeks on Monday", () => {
+    assert.equal(weekStart("2026-11-02"), "2026-11-02"); // Monday
+    assert.equal(weekStart("2026-11-03"), "2026-11-02");
+    assert.equal(weekStart("2026-11-08"), "2026-11-02"); // Sunday ends the week
+    assert.equal(weekStart("2027-01-01"), "2026-12-28");
+    assert.equal(isSunday("2026-11-08"), true);
+    assert.equal(isSunday("2026-11-09"), false);
   });
 
   it("falls back to UTC for an unknown time zone", () => {

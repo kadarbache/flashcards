@@ -394,3 +394,26 @@ export function BossIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Bars rising, for the weekly recap. */
+export function ChartIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M5 20v-7" />
+      <path d="M12 20V5" />
+      <path d="M19 20v-10" />
+      <path d="M3 20.5h18" />
+    </Line>
+  );
+}
+
+/** An arrow leaving a box, for sharing. */
+export function ShareIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M12 3.5v11" />
+      <path d="m7.5 8 4.5-4.5L16.5 8" />
+      <path d="M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+    </Line>
+  );
+}

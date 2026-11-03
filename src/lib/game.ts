@@ -115,6 +115,16 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((parseDay(to).getTime() - parseDay(from).getTime()) / 86_400_000);
 }
 
+/** The Monday of the week `day` falls in. Weeks run Monday to Sunday. */
+export function weekStart(day: string): string {
+  const weekday = parseDay(day).getUTCDay(); // 0 is Sunday
+  return addDays(day, -((weekday + 6) % 7));
+}
+
+export function isSunday(day: string): boolean {
+  return parseDay(day).getUTCDay() === 0;
+}
+
 /** "2026-10-31" -> "Sat 31 Oct". `weekday: "long"` gives "Saturday 31 Oct". */
 export function formatDay(day: string, weekday: "short" | "long" = "short"): string {
   return new Intl.DateTimeFormat("en-GB", {

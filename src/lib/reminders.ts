@@ -1,8 +1,8 @@
 /**
  * Phone reminders: once a day, in the evening, a notification if today still
  * needs something -- the daily goal that keeps the streak, today's Word of the
- * Day, or a fight with the boss. Nothing is sent on a day that is already
- * done.
+ * Day, or a fight with the boss -- and on Sundays, the week's recap. Nothing
+ * is sent on a day that is already done.
  *
  * This file is the wording and the timing, with no database or network, so it
  * can be tested on its own. Sending lives in `reminders-db.ts`.
@@ -29,6 +29,8 @@ export interface ReminderState {
   wordWaiting: boolean;
   /** A boss can still be beaten and has not been fought today. */
   bossWaiting: boolean;
+  /** It is Sunday, so the week's recap is ready. */
+  recapReady: boolean;
 }
 
 export interface ReminderMessage {
@@ -59,7 +61,8 @@ function timeLeft(hours: number): string {
 
 /**
  * What to say tonight, or null when there is nothing left to do. The goal
- * comes first, then today's word, then the boss.
+ * comes first, then today's word, then the boss; on a Sunday with all of
+ * that done, the week's recap.
  */
 export function reminderMessage(state: ReminderState, hoursLeft: number): ReminderMessage | null {
   const left = Math.max(0, state.goal - state.today);
@@ -98,6 +101,14 @@ export function reminderMessage(state: ReminderState, hoursLeft: number): Remind
       title: "The boss is waiting",
       body: "Goal done. Fight it before midnight, or it heals.",
       url: "/boss",
+    };
+  }
+
+  if (state.recapReady) {
+    return {
+      title: "Your week in words is ready",
+      body: "Goal done. See what this week added up to.",
+      url: "/recap",
     };
   }
 

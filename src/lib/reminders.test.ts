@@ -34,6 +34,7 @@ const base = {
   todayDone: false,
   wordWaiting: false,
   bossWaiting: false,
+  recapReady: false,
 };
 
 describe("reminderMessage", () => {
@@ -67,6 +68,11 @@ describe("reminderMessage", () => {
       reminderMessage({ ...base, today: 10, bossWaiting: true }, 3)?.body,
       "10 more cards is all it takes. The boss is waiting too.",
     );
+  });
+
+  it("offers the week's recap on a Sunday that is done, and the streak first when it is not", () => {
+    assert.equal(reminderMessage({ ...base, todayDone: true, today: 20, recapReady: true }, 3)?.url, "/recap");
+    assert.equal(reminderMessage({ ...base, streak: 4, recapReady: true }, 3)?.url, "/");
   });
 
   it("says the time left in plain words", () => {
@@ -192,12 +198,21 @@ describe("the reminder job", () => {
   });
 
   it("stays quiet when the goal is done", async () => {
+    // A Monday: on a Sunday a finished day gets the week's recap instead.
     await saveDevice(phone, "Africa/Nairobi");
-    await answered(20, new Date("2026-11-01T09:00:00Z"));
+    await answered(20, new Date("2026-11-02T09:00:00Z"));
     const { sent, send } = recorder();
-    const run = await runReminders(evening, send);
+    const run = await runReminders(new Date("2026-11-02T17:00:00Z"), send);
     assert.equal(run.skipped, "today is done");
     assert.equal(sent.length, 0);
+  });
+
+  it("sends the week's recap on a Sunday that is done", async () => {
+    await saveDevice(phone, "Africa/Nairobi");
+    await answered(20, new Date("2026-11-01T09:00:00Z")); // 1 November is a Sunday
+    const { sent, send } = recorder();
+    await runReminders(evening, send);
+    assert.equal(sent[0]?.message.url, "/recap");
   });
 
   it("points at a boss still to fight once the goal is done", async () => {

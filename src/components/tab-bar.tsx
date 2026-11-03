@@ -9,6 +9,7 @@ import { DeckForm } from "@/components/deck-form";
 import {
   AlbumIcon,
   BossIcon,
+  ChartIcon,
   CloseIcon,
   HelpIcon,
   HomeIcon,
@@ -56,7 +57,8 @@ const tabOff = "text-ink-muted hover:text-ink";
 /**
  * The navigation on phones, at the bottom where a thumb reaches it, in place
  * of the header. Home, videos, a big button for a new deck, Word of the Day,
- * and "More" for the boss, the album, help, sound and signing out.
+ * and "More" for the boss, the weekly recap, the album, help, sound and
+ * signing out.
  */
 export function TabBar() {
   const pathname = usePathname();
@@ -75,7 +77,7 @@ export function TabBar() {
   const close = () => setSheet(null);
   const [home, watch, word] = TABS;
   const moreActive =
-    sheet === "more" || ["/collection", "/help", "/boss"].some((path) => pathname.startsWith(path));
+    sheet === "more" || ["/collection", "/help", "/boss", "/recap"].some((path) => pathname.startsWith(path));
 
   return (
     <>
@@ -136,6 +138,15 @@ export function TabBar() {
                 <span>
                   <span className="block font-bold">Boss fight</span>
                   <span className="block text-xs text-ink-muted">The word you keep forgetting, and your trophies</span>
+                </span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/recap" onClick={close} className={row}>
+                <ChartIcon className="h-5 w-5 text-easy" />
+                <span>
+                  <span className="block font-bold">Your week</span>
+                  <span className="block text-xs text-ink-muted">What the week added up to, to share</span>
                 </span>
               </Link>
             </li>
