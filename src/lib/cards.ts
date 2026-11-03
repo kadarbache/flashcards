@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 import { connectToDatabase } from "@/lib/db/connect";
-import { Card, Deck } from "@/lib/db/models";
+import { Card, Deck, ReviewLog } from "@/lib/db/models";
 
 /** Long enough for a paragraph-sized answer, short enough to catch a bad paste. */
 const MAX_FIELD_LENGTH = 2000;
@@ -155,6 +155,24 @@ export async function addCardsToDeck(
     duplicatesInBatch,
     rejected,
   };
+}
+
+/**
+ * Delete one card and its review history. Returns the deck it was in, or null
+ * when there is no such card (already deleted, or not a card id at all).
+ */
+export async function removeCard(cardId: string): Promise<{ id: string; name: string } | null> {
+  if (!mongoose.Types.ObjectId.isValid(cardId)) return null;
+  await connectToDatabase();
+
+  const card = await Card.findByIdAndDelete(cardId).select({ deckId: 1 }).lean();
+  if (!card) return null;
+
+  const [deck] = await Promise.all([
+    Deck.findById(card.deckId).select({ name: 1 }).lean(),
+    ReviewLog.deleteMany({ cardId: card._id }),
+  ]);
+  return { id: String(card.deckId), name: deck?.name ?? "" };
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   formatTimestamp,
   normalizeWord,
   tokenize,
+  type SavedCard,
   type TranscriptLine,
 } from "@/lib/transcript";
 import type { SourceFailure } from "@/lib/transcript-sources";
@@ -51,21 +52,23 @@ export function WatchSession({
   start,
   outcome,
   decks,
-  knownWords,
+  savedCards,
   backupConfigured,
 }: {
   videoId: string;
   start: number;
   outcome: TranscriptOutcome;
   decks: DeckOption[];
-  knownWords: string[];
+  savedCards: SavedCard[];
   backupConfigured: boolean;
 }) {
   const [transcript, setTranscript] = useState<TranscriptView | null>(outcome.ok ? outcome.transcript : null);
   const [active, setActive] = useState(-1);
   const [follow, setFollow] = useState(true);
   const [hovering, setHovering] = useState(false);
-  const [known, setKnown] = useState(() => new Set(knownWords));
+  const [saved, setSaved] = useState(savedCards);
+  // Words with a card, underlined in the transcript.
+  const known = useMemo(() => new Set(saved.map((card) => normalizeWord(card.front)).filter(Boolean)), [saved]);
   const [pick, setPick] = useState<WordPick | null>(null);
   const resumeAfter = useRef(false);
   const pickCount = useRef(0);
@@ -120,8 +123,12 @@ export function WatchSession({
     resumeAfter.current = false;
   }, [controls]);
 
-  const added = useCallback((front: string) => {
-    setKnown((current) => new Set(current).add(normalizeWord(front)));
+  const added = useCallback((card: SavedCard) => {
+    setSaved((current) => [...current, card]);
+  }, []);
+
+  const removed = useCallback((cardId: string) => {
+    setSaved((current) => current.filter((card) => card.id !== cardId));
   }, []);
 
   /**
@@ -246,7 +253,14 @@ export function WatchSession({
         </div>
       </div>
 
-      <WordSheet pick={pick} decks={decks} onClose={close} onAdded={added} />
+      <WordSheet
+        pick={pick}
+        decks={decks}
+        saved={saved}
+        onClose={close}
+        onAdded={added}
+        onRemoved={removed}
+      />
     </>
   );
 }

@@ -8,8 +8,9 @@ import { field, iconButton, panel, primaryButton } from "@/components/ui";
 import { WatchSession } from "@/components/watch/watch-session";
 import { listDecks } from "@/lib/decks";
 import { parseStartTime, parseVideoId } from "@/lib/transcript";
+import type { SavedCard } from "@/lib/transcript";
 import {
-  listKnownWords,
+  listSavedCards,
   listRecentVideos,
   getTranscript,
   type RecentVideo,
@@ -56,16 +57,16 @@ export default async function WatchPage({ searchParams }: PageProps<"/watch">) {
 
   let outcome: TranscriptOutcome;
   let decks: DeckOption[];
-  let knownWords: string[];
+  let savedCards: SavedCard[];
   try {
-    const [transcript, deckList, words] = await Promise.all([
+    const [transcript, deckList, cards] = await Promise.all([
       getTranscript(videoId),
       listDecks(),
-      listKnownWords(),
+      listSavedCards(),
     ]);
     outcome = transcript;
     decks = deckList.map((deck) => ({ id: deck.id, name: deck.name }));
-    knownWords = words;
+    savedCards = cards;
   } catch (error) {
     return <SetupNotice error={error} />;
   }
@@ -77,7 +78,7 @@ export default async function WatchPage({ searchParams }: PageProps<"/watch">) {
       start={start}
       outcome={outcome}
       decks={decks}
-      knownWords={knownWords}
+      savedCards={savedCards}
       backupConfigured={Boolean(process.env.SUPADATA_API_KEY)}
     />
   );

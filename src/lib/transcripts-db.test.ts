@@ -12,8 +12,8 @@ import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, Transcript } from "@/lib/db/models";
 import {
   getTranscript,
-  listKnownWords,
   listRecentVideos,
+  listSavedCards,
   saveUploadedTranscript,
 } from "@/lib/transcripts-db";
 import { fetchFromSupadata, fetchFromYouTube } from "@/lib/transcript-sources";
@@ -258,13 +258,25 @@ describe("transcripts in the database", () => {
     );
   });
 
-  it("lists the words already on cards, lowercased", async () => {
-    const deck = await Deck.create({ name: "Vocab" });
-    await Card.create([
-      { deckId: deck._id, front: "Stranger", back: "x" },
-      { deckId: deck._id, front: "stranger", back: "y" },
-      { deckId: deck._id, front: "rule", back: "z" },
+  it("lists every saved card with its deck, for the watch screen to check words against", async () => {
+    const [vocab, other] = await Deck.create([{ name: "Vocab" }, { name: "Other" }]);
+    const [stranger, rule] = await Card.create([
+      { deckId: vocab._id, front: "Stranger", back: "someone you do not know", example: "not sent" },
+      { deckId: other._id, front: "rule", back: "what you must do" },
     ]);
-    assert.deepEqual((await listKnownWords()).sort(), ["rule", "stranger"]);
+
+    const cards = await listSavedCards();
+    assert.deepEqual(
+      cards.sort((a, b) => a.front.localeCompare(b.front)),
+      [
+        { id: String(rule._id), deckId: String(other._id), front: "rule", back: "what you must do" },
+        {
+          id: String(stranger._id),
+          deckId: String(vocab._id),
+          front: "Stranger",
+          back: "someone you do not know",
+        },
+      ],
+    );
   });
 });

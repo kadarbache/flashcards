@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 
 import { POST as postCards } from "@/app/api/decks/[deck]/cards/route";
 import { POST as postDeck } from "@/app/api/decks/route";
-import { addCardsToDeck, extractCardList } from "@/lib/cards";
+import { addCardsToDeck, extractCardList, removeCard } from "@/lib/cards";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
 
@@ -366,5 +366,39 @@ describe("card examples", () => {
     assert.ok(result.ok);
     assert.equal(result.added, 0);
     assert.match(result.rejected[0].reason, /example/);
+  });
+});
+
+describe("removeCard", () => {
+  function logFor(card: { _id: mongoose.Types.ObjectId; deckId: mongoose.Types.ObjectId }) {
+    return {
+      cardId: card._id,
+      deckId: card.deckId,
+      grade: "good" as const,
+      before: { state: "new" as const, step: 0, intervalDays: 0, ease: 2.5, due: new Date(), lapses: 0, reps: 0 },
+      intervalDaysAfter: 1,
+      easeAfter: 2.5,
+    };
+  }
+
+  it("deletes the card and its history, and says which deck it left", async () => {
+    const deck = await Deck.create({ name: "Vocab" });
+    const [gone, kept] = await Card.create([
+      { deckId: deck._id, front: "stranger", back: "someone you do not know" },
+      { deckId: deck._id, front: "rule", back: "what you must do" },
+    ]);
+    await ReviewLog.create([logFor(gone), logFor(gone), logFor(kept)]);
+
+    assert.deepEqual(await removeCard(String(gone._id)), { id: String(deck._id), name: "Vocab" });
+
+    assert.equal(await Card.countDocuments({ _id: gone._id }), 0);
+    assert.equal(await ReviewLog.countDocuments({ cardId: gone._id }), 0);
+    assert.equal(await Card.countDocuments({ _id: kept._id }), 1, "the other card stays");
+    assert.equal(await ReviewLog.countDocuments({ cardId: kept._id }), 1, "and so does its history");
+  });
+
+  it("answers null for a card already gone, or no card id at all", async () => {
+    assert.equal(await removeCard(String(new mongoose.Types.ObjectId())), null);
+    assert.equal(await removeCard("not-an-id"), null);
   });
 });

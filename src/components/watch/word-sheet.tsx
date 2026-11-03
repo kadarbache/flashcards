@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { addWordToDeck, defineWord } from "@/app/watch/actions";
+import { addWordToDeck, defineWord, removeWordFromDeck } from "@/app/watch/actions";
 import { play } from "@/components/game/sound";
-import { CheckIcon, CloseIcon, PlusIcon, SpeakIcon } from "@/components/icons";
+import { CheckIcon, CloseIcon, MinusIcon, PlusIcon, SpeakIcon } from "@/components/icons";
 import { Sheet } from "@/components/sheet";
 import { field, iconButton, label, primaryButton } from "@/components/ui";
 import type { DictionaryEntry, LookupOutcome } from "@/lib/dictionary";
+import { findSavedCards, type SavedCard } from "@/lib/transcript";
 
 export interface DeckOption {
   id: string;
@@ -25,6 +26,10 @@ export interface WordPick {
 }
 
 const DECK_KEY = "watch-deck";
+
+/** Red, for taking a card away. Not gold: it should not look like the thing to do. */
+const removeButton =
+  "inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-again/40 bg-again/10 px-5 text-base font-bold text-again transition hover:bg-again/20 active:scale-[0.97] disabled:opacity-50";
 
 function rememberedDeck(decks: DeckOption[]): string {
   try {
@@ -89,7 +94,8 @@ function cardBack(partOfSpeech: string, definition: string): string {
 }
 
 /**
- * The sheet that opens on a word: what it means, and a way to keep it.
+ * The sheet that opens on a word: what it means, and a way to keep it, or to
+ * take it back out when a deck already has it.
  *
  * Every field is editable before saving -- the dictionary's first definition
  * is a starting point, not always the meaning the video used.
@@ -97,17 +103,32 @@ function cardBack(partOfSpeech: string, definition: string): string {
 export function WordSheet({
   pick,
   decks,
+  saved,
   onClose,
   onAdded,
+  onRemoved,
 }: {
   pick: WordPick | null;
   decks: DeckOption[];
+  /** Every card in every deck, to tell whether the word is saved already. */
+  saved: SavedCard[];
   onClose: () => void;
-  onAdded: (front: string) => void;
+  onAdded: (card: SavedCard) => void;
+  onRemoved: (cardId: string) => void;
 }) {
   return (
     <Sheet open={pick !== null} onClose={onClose} label={pick ? `Meaning of ${pick.word}` : "Word"}>
-      {pick && <SheetBody key={pick.id} pick={pick} decks={decks} onClose={onClose} onAdded={onAdded} />}
+      {pick && (
+        <SheetBody
+          key={pick.id}
+          pick={pick}
+          decks={decks}
+          saved={saved}
+          onClose={onClose}
+          onAdded={onAdded}
+          onRemoved={onRemoved}
+        />
+      )}
     </Sheet>
   );
 }
@@ -115,21 +136,27 @@ export function WordSheet({
 function SheetBody({
   pick,
   decks,
+  saved,
   onClose,
   onAdded,
+  onRemoved,
 }: {
   pick: WordPick;
   decks: DeckOption[];
+  saved: SavedCard[];
   onClose: () => void;
-  onAdded: (front: string) => void;
+  onAdded: (card: SavedCard) => void;
+  onRemoved: (cardId: string) => void;
 }) {
   const [lookup, setLookup] = useState<LookupOutcome | null>(null);
   const [front, setFront] = useState(pick.word);
   const [back, setBack] = useState("");
   const [example, setExample] = useState(pick.sentence);
-  const [deckId, setDeckId] = useState(() => rememberedDeck(decks));
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [lastDeck] = useState(() => rememberedDeck(decks));
+  const [chosenDeck, setChosenDeck] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,27 +178,65 @@ function SheetBody({
     };
   }, [pick.word, pick.sentence]);
 
+  const entry: DictionaryEntry | null = lookup?.ok ? lookup.entry : null;
+
+  // Cards for the tapped word, and for its dictionary form once the lookup
+  // says what that is: a tapped "running" finds a card saved as "run".
+  const matches = useMemo(
+    () =>
+      findSavedCards(saved, entry ? [pick.word, entry.word] : [pick.word]).filter((card) =>
+        decks.some((deck) => deck.id === card.deckId),
+      ),
+    [saved, decks, pick.word, entry],
+  );
+  // A deck that has the word already comes up first, so the sheet says so at once.
+  const deckId = chosenDeck ?? matches[0]?.deckId ?? lastDeck;
+  const savedHere = matches.find((card) => card.deckId === deckId) ?? null;
+  const deckName = (id: string) => decks.find((deck) => deck.id === id)?.name ?? "another deck";
+  const otherDecks = [...new Set(matches.filter((card) => card.deckId !== deckId).map((card) => card.deckId))];
+
+  function finish(text: string) {
+    setDone(text);
+    window.setTimeout(onClose, 900);
+  }
+
   async function save() {
-    if (saving || !deckId) return;
-    setSaving(true);
-    setMessage(null);
+    if (busy || !deckId) return;
+    setBusy(true);
+    setError(null);
     try {
       const outcome = await addWordToDeck({ deckId, front, back, example });
-      setMessage({ ok: outcome.ok, text: outcome.message });
       if (outcome.ok) {
         play("good");
         rememberDeck(deckId);
-        onAdded(front);
-        window.setTimeout(onClose, 900);
+        onAdded(outcome.card);
+        finish(outcome.message);
+      } else {
+        setError(outcome.message);
       }
     } catch {
-      setMessage({ ok: false, text: "That could not be saved. Try again." });
+      setError("That could not be saved. Try again.");
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
 
-  const entry: DictionaryEntry | null = lookup?.ok ? lookup.entry : null;
+  async function remove(card: SavedCard) {
+    if (busy) return;
+    const question = `Remove “${card.front}” from ${deckName(card.deckId)}? Its review history goes with it.`;
+    if (!window.confirm(question)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const outcome = await removeWordFromDeck(card.id);
+      onRemoved(card.id);
+      finish(outcome.message);
+    } catch {
+      setError("That could not be removed. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-5 p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:p-6">
@@ -198,7 +263,12 @@ function SheetBody({
 
       <Meanings lookup={lookup} word={pick.word} selected={back} onSelect={setBack} />
 
-      {decks.length === 0 ? (
+      {done ? (
+        <p role="status" className="flex items-center gap-2 rounded-2xl bg-surface-high p-4 font-bold text-good">
+          <CheckIcon className="h-5 w-5" />
+          {done}
+        </p>
+      ) : decks.length === 0 ? (
         <p className="rounded-2xl bg-surface-high p-4 text-sm">
           Make a deck first, then come back to add words to it.{" "}
           <Link href="/" className="font-bold text-gold hover:underline">
@@ -210,22 +280,24 @@ function SheetBody({
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void save();
+            if (!savedHere) void save();
           }}
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1.2fr]">
-            <div>
-              <label className={label} htmlFor="word-front">
-                Word
-              </label>
-              <input
-                id="word-front"
-                className={field}
-                value={front}
-                onChange={(event) => setFront(event.target.value)}
-                autoComplete="off"
-              />
-            </div>
+          <div className={`grid grid-cols-1 gap-3 ${savedHere ? "" : "sm:grid-cols-[1fr_1.2fr]"}`}>
+            {!savedHere && (
+              <div>
+                <label className={label} htmlFor="word-front">
+                  Word
+                </label>
+                <input
+                  id="word-front"
+                  className={field}
+                  value={front}
+                  onChange={(event) => setFront(event.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+            )}
             <div>
               <label className={label} htmlFor="word-deck">
                 Deck
@@ -234,7 +306,10 @@ function SheetBody({
                 id="word-deck"
                 className={field}
                 value={deckId}
-                onChange={(event) => setDeckId(event.target.value)}
+                onChange={(event) => {
+                  setChosenDeck(event.target.value);
+                  setError(null);
+                }}
               >
                 {decks.map((deck) => (
                   <option key={deck.id} value={deck.id}>
@@ -244,50 +319,73 @@ function SheetBody({
               </select>
             </div>
           </div>
-          <div>
-            <label className={label} htmlFor="word-back">
-              Meaning
-            </label>
-            <textarea
-              id="word-back"
-              className={`${field} min-h-20`}
-              value={back}
-              onChange={(event) => setBack(event.target.value)}
-              placeholder="Write what it means"
-              rows={2}
-            />
-          </div>
-          <div>
-            <label className={label} htmlFor="word-example">
-              Example
-            </label>
-            <textarea
-              id="word-example"
-              className={`${field} min-h-24 text-sm italic`}
-              value={example}
-              onChange={(event) => setExample(event.target.value)}
-              rows={3}
-            />
-          </div>
 
-          {message && (
-            <p
-              role="status"
-              className={`flex items-center gap-2 text-sm font-bold ${message.ok ? "text-good" : "text-again"}`}
-            >
-              {message.ok && <CheckIcon className="h-4 w-4" />}
-              {message.text}
+          {savedHere ? (
+            <div className="rounded-2xl border border-gold/40 bg-[#2b2614] p-4">
+              <p className="flex items-center gap-1.5 text-xs font-extrabold tracking-wide text-gold uppercase">
+                <CheckIcon className="h-4 w-4" />
+                Already in {deckName(savedHere.deckId)}
+              </p>
+              <p className="mt-2 font-bold break-words">{savedHere.front}</p>
+              <p className="text-sm break-words text-ink-muted">{savedHere.back}</p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className={label} htmlFor="word-back">
+                  Meaning
+                </label>
+                <textarea
+                  id="word-back"
+                  className={`${field} min-h-20`}
+                  value={back}
+                  onChange={(event) => setBack(event.target.value)}
+                  placeholder="Write what it means"
+                  rows={2}
+                />
+              </div>
+              <div>
+                <label className={label} htmlFor="word-example">
+                  Example
+                </label>
+                <textarea
+                  id="word-example"
+                  className={`${field} min-h-24 text-sm italic`}
+                  value={example}
+                  onChange={(event) => setExample(event.target.value)}
+                  rows={3}
+                />
+              </div>
+            </>
+          )}
+
+          {otherDecks.length > 0 && (
+            <p className="text-sm text-ink-muted">
+              {savedHere ? "Also in" : "Already in"} {otherDecks.map(deckName).join(", ")}.
             </p>
           )}
 
-          <button
-            type="submit"
-            className={`${primaryButton} w-full`}
-            disabled={saving || front.trim() === "" || back.trim() === "" || message?.ok === true}
-          >
-            <PlusIcon className="h-5 w-5" />
-            {saving ? "Adding…" : "Add to deck"}
-          </button>
+          {error && (
+            <p role="alert" className="text-sm font-bold text-again">
+              {error}
+            </p>
+          )}
+
+          {savedHere ? (
+            <button type="button" className={removeButton} disabled={busy} onClick={() => void remove(savedHere)}>
+              <MinusIcon className="h-5 w-5" />
+              {busy ? "Removing…" : "Remove from deck"}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className={`${primaryButton} w-full`}
+              disabled={busy || front.trim() === "" || back.trim() === ""}
+            >
+              <PlusIcon className="h-5 w-5" />
+              {busy ? "Adding…" : "Add to deck"}
+            </button>
+          )}
         </form>
       )}
     </div>

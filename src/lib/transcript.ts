@@ -314,6 +314,23 @@ export function normalizeWord(word: string): string {
     .replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "");
 }
 
+/** A card already in a deck, as the watch screen checks words against. */
+export interface SavedCard {
+  id: string;
+  deckId: string;
+  front: string;
+  back: string;
+}
+
+/**
+ * The cards saved under any of `words`, compared the way the transcript
+ * compares words: "Stranger" on a card matches a tapped "stranger,".
+ */
+export function findSavedCards(cards: readonly SavedCard[], words: readonly string[]): SavedCard[] {
+  const wanted = new Set(words.map(normalizeWord).filter(Boolean));
+  return cards.filter((card) => wanted.has(normalizeWord(card.front)));
+}
+
 /** The index of the line playing at `time`: the last one that has started. -1 before the first. */
 export function activeLineIndex(lines: readonly TranscriptLine[], time: number): number {
   let low = 0;

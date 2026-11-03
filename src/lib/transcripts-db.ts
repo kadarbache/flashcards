@@ -1,6 +1,11 @@
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Transcript } from "@/lib/db/models";
-import { linesFromSegments, normalizeWord, parseSubtitleFile, type TranscriptLine } from "@/lib/transcript";
+import {
+  linesFromSegments,
+  parseSubtitleFile,
+  type SavedCard,
+  type TranscriptLine,
+} from "@/lib/transcript";
 import {
   fetchFromSupadata,
   fetchFromYouTube,
@@ -213,9 +218,17 @@ export async function listRecentVideos(limit = 8): Promise<RecentVideo[]> {
   return recent;
 }
 
-/** Every card front in every deck, as the transcript compares words: lowercased. */
-export async function listKnownWords(): Promise<string[]> {
+/**
+ * Every card in every deck, so the watch screen can mark words already saved
+ * and offer to remove them. Only the fields it shows: a few dozen bytes a card.
+ */
+export async function listSavedCards(): Promise<SavedCard[]> {
   await connectToDatabase();
-  const fronts = (await Card.distinct("front")) as string[];
-  return [...new Set(fronts.map(normalizeWord).filter(Boolean))];
+  const cards = await Card.find().select({ deckId: 1, front: 1, back: 1 }).lean();
+  return cards.map((card) => ({
+    id: String(card._id),
+    deckId: String(card.deckId),
+    front: card.front,
+    back: card.back,
+  }));
 }

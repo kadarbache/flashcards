@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { requireSession } from "@/lib/auth-guard";
-import { addCardsToDeck } from "@/lib/cards";
+import { addCardsToDeck, removeCard } from "@/lib/cards";
 import { defineInContext } from "@/lib/ai-meaning";
 import type { LookupOutcome } from "@/lib/dictionary";
-import { parseVideoId } from "@/lib/transcript";
+import { parseVideoId, type SavedCard } from "@/lib/transcript";
 import { saveUploadedTranscript, type UploadOutcome } from "@/lib/transcripts-db";
 
 /**
@@ -47,7 +47,7 @@ export interface WordCardInput {
   example: string;
 }
 
-export type AddWordOutcome = { ok: true; message: string } | { ok: false; message: string };
+export type AddWordOutcome = { ok: true; message: string; card: SavedCard } | { ok: false; message: string };
 
 /** Add a word from a video to a deck, with the line it came from as the example. */
 export async function addWordToDeck(input: WordCardInput): Promise<AddWordOutcome> {
@@ -67,5 +67,24 @@ export async function addWordToDeck(input: WordCardInput): Promise<AddWordOutcom
 
   revalidatePath("/");
   revalidatePath(`/decks/${result.deck.id}`);
-  return { ok: true, message: `Added to ${result.deck.name}.` };
+  const [card] = result.cards;
+  return {
+    ok: true,
+    message: `Added to ${result.deck.name}.`,
+    card: { id: card.id, deckId: result.deck.id, front: card.front, back: card.back },
+  };
+}
+
+/**
+ * Take a word back out of its deck, from the watch screen's sheet. Its review
+ * history goes with it. A card already gone counts as removed.
+ */
+export async function removeWordFromDeck(cardId: string): Promise<{ message: string }> {
+  await requireSession();
+  const deck = await removeCard(typeof cardId === "string" ? cardId : "");
+  if (!deck) return { message: "Removed." };
+
+  revalidatePath("/");
+  revalidatePath(`/decks/${deck.id}`);
+  return { message: deck.name ? `Removed from ${deck.name}.` : "Removed." };
 }

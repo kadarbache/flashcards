@@ -231,7 +231,10 @@ means. Pick the definition that fits, choose a deck, and **Add to deck**. The
 card gets the word on the front, the meaning on the back, and the line from the
 video as an **example**, which shows under the answer in review and practice.
 The video pauses while the sheet is open and carries on when it closes. Words
-already on a card are underlined in the transcript.
+already on a card are underlined in the transcript. Tapping one opens the
+sheet on the deck that has it, with the saved card and **Remove from deck**
+in place of the form ("running" finds a card saved as "run" too). Removing
+asks first, since the card's review history goes with it.
 
 **The player** is YouTube's official IFrame Player API: free, no key.
 

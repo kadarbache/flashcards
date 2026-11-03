@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import {
   activeLineIndex,
   decodeEntities,
+  findSavedCards,
   formatTimestamp,
   linesFromSegments,
   parseStartTime,
@@ -230,6 +231,38 @@ describe("tokenize", () => {
       tokenize("café naïve").map((token) => token.word),
       ["café", null, "naïve"],
     );
+  });
+});
+
+describe("findSavedCards", () => {
+  const cards = [
+    { id: "1", deckId: "a", front: "Stranger", back: "someone you do not know" },
+    { id: "2", deckId: "b", front: "stranger", back: "a person not known" },
+    { id: "3", deckId: "a", front: "run", back: "move fast" },
+    { id: "4", deckId: "a", front: "give up", back: "stop trying" },
+  ];
+
+  it("finds a word in every deck that has it, whatever its case or punctuation", () => {
+    assert.deepEqual(
+      findSavedCards(cards, ["stranger,"]).map((card) => card.id),
+      ["1", "2"],
+    );
+  });
+
+  it("checks the dictionary form too, and phrases whole", () => {
+    assert.deepEqual(
+      findSavedCards(cards, ["running", "run"]).map((card) => card.id),
+      ["3"],
+    );
+    assert.deepEqual(
+      findSavedCards(cards, ["Give up"]).map((card) => card.id),
+      ["4"],
+    );
+  });
+
+  it("finds nothing for a word no card has, or for no word", () => {
+    assert.deepEqual(findSavedCards(cards, ["love"]), []);
+    assert.deepEqual(findSavedCards(cards, ["", "..."]), []);
   });
 });
 
