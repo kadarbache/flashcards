@@ -44,6 +44,45 @@ function rememberDeck(id: string): void {
   }
 }
 
+/** Answers already asked for, by word and line. A word tapped again opens at once and costs nothing. */
+const answers = new Map<string, Promise<LookupOutcome>>();
+const MAX_ANSWERS = 50;
+
+/**
+ * One request per word and line, however often it is asked for. React runs
+ * the sheet's effect twice in development, which would otherwise pay twice.
+ * A failure is forgotten so the next tap tries again.
+ */
+function lookUp(word: string, sentence: string): Promise<LookupOutcome> {
+  const key = `${word}\n${sentence}`;
+  const known = answers.get(key);
+  if (known) return known;
+
+  const asked = defineWord(word, sentence);
+  answers.set(key, asked);
+  if (answers.size > MAX_ANSWERS) answers.delete(answers.keys().next().value as string);
+  const forget = () => answers.delete(key);
+  asked.then((outcome) => !outcome.ok && outcome.reason === "failed" && forget(), forget);
+  return asked;
+}
+
+function canSpeak(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+/** The dictionary's recording when there is one, the browser's own voice otherwise. */
+function pronounce(entry: DictionaryEntry) {
+  const speak = () => {
+    if (!canSpeak()) return;
+    const utterance = new SpeechSynthesisUtterance(entry.word);
+    utterance.lang = "en-US";
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  };
+  if (entry.audio) void new Audio(entry.audio).play().catch(speak);
+  else speak();
+}
+
 /** A definition as the back of a card: "(verb) to move fast on foot", the label style the app already reads. */
 function cardBack(partOfSpeech: string, definition: string): string {
   return partOfSpeech && partOfSpeech !== "word" ? `(${partOfSpeech}) ${definition}` : definition;
@@ -94,7 +133,7 @@ function SheetBody({
 
   useEffect(() => {
     let cancelled = false;
-    defineWord(pick.word)
+    lookUp(pick.word, pick.sentence)
       .then((outcome) => {
         if (cancelled) return;
         setLookup(outcome);
@@ -110,7 +149,7 @@ function SheetBody({
     return () => {
       cancelled = true;
     };
-  }, [pick.word]);
+  }, [pick.word, pick.sentence]);
 
   async function save() {
     if (saving || !deckId) return;
@@ -142,12 +181,12 @@ function SheetBody({
           <h2 className="text-3xl font-extrabold tracking-tight break-words">{entry?.word ?? pick.word}</h2>
           {entry?.phonetic && <p className="text-ink-muted">{entry.phonetic}</p>}
         </div>
-        {entry?.audio && (
+        {entry && (entry.audio || canSpeak()) && (
           <button
             type="button"
             className={iconButton}
             aria-label={`Hear “${entry.word}”`}
-            onClick={() => void new Audio(entry.audio ?? "").play().catch(() => {})}
+            onClick={() => pronounce(entry)}
           >
             <SpeakIcon className="h-5 w-5" />
           </button>
@@ -292,6 +331,7 @@ function Meanings({
         <section key={`${index}-${meaning.partOfSpeech}`} className="space-y-2">
           <h3 className="text-xs font-extrabold tracking-wide text-ink-muted uppercase">
             {meaning.partOfSpeech}
+            {lookup.entry.inContext && " · in this sentence"}
           </h3>
           <ul className="space-y-2">
             {meaning.definitions.map((definition) => {

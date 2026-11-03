@@ -23,6 +23,8 @@ export interface DictionaryEntry {
   /** A recording of the word, when the dictionary has one. */
   audio: string | null;
   meanings: Meaning[];
+  /** Set when an AI model picked the one meaning the sentence uses, rather than listing them all. */
+  inContext?: true;
 }
 
 export type LookupOutcome =

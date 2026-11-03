@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { requireSession } from "@/lib/auth-guard";
 import { addCardsToDeck } from "@/lib/cards";
-import { lookupWord, type LookupOutcome } from "@/lib/dictionary";
+import { defineInContext } from "@/lib/ai-meaning";
+import type { LookupOutcome } from "@/lib/dictionary";
 import { parseVideoId } from "@/lib/transcript";
 import { saveUploadedTranscript, type UploadOutcome } from "@/lib/transcripts-db";
 
@@ -14,11 +15,18 @@ import { saveUploadedTranscript, type UploadOutcome } from "@/lib/transcripts-db
  * without the page ever rendering.
  */
 
-/** The meaning of a word clicked in a transcript. */
-export async function defineWord(word: string): Promise<LookupOutcome> {
+/**
+ * The meaning of a word clicked in a transcript, as used in its line. An AI
+ * model reads it in context when OPENROUTER_API_KEY is set; the dictionaries
+ * answer otherwise.
+ */
+export async function defineWord(word: string, sentence: string): Promise<LookupOutcome> {
   await requireSession();
   if (typeof word !== "string" || word.length > 60) return { ok: false, reason: "not-found" };
-  return lookupWord(word);
+  return defineInContext(word, typeof sentence === "string" ? sentence : "", {
+    apiKey: process.env.OPENROUTER_API_KEY || null,
+    model: process.env.OPENROUTER_MODEL,
+  });
 }
 
 /** Save a pasted or uploaded transcript for a video, in place of YouTube's captions. */

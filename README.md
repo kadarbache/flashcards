@@ -82,6 +82,7 @@ src/lib/
   transcript.ts       links, caption files, sentences, clickable words (pure)
   transcript-sources.ts  YouTube and Supadata; transcripts-db.ts saves and serves
   dictionary.ts       word lookups: Free Dictionary, then Wiktionary
+  ai-meaning.ts       a word's meaning in its sentence, from an AI model on OpenRouter
   db/                 Mongoose connection and models
 src/app/
   actions.ts          Server Actions (thin wrappers over lib/)
@@ -254,11 +255,20 @@ Caption fragments are re-cut into whole sentences, since a sentence is what
 ends up on the card. A video with several caption tracks shows its English one
 (written by a person if there is one), otherwise the best of what it has.
 
-**Meanings** come from the Free Dictionary API (dictionaryapi.dev), with
-Wiktionary as the fallback when it is down or has nothing, both free and
-keyless. English only. A clicked "running" or "cities" finds "run" and "city".
-When the Free Dictionary fails, the app skips it for five minutes rather than
-waiting on its timeout with every click.
+**Meanings** come from an AI model when `OPENROUTER_API_KEY` is set. It gets
+the tapped word and its transcript line, and answers with the word's dictionary
+form, its part of speech, and one short meaning for how that sentence uses it.
+The model is `google/gemini-3.1-flash-lite` unless `OPENROUTER_MODEL` names
+another; it is asked not to "think" first and routed to whichever provider is
+quickest. Of the small models tried it was the fastest, under a second a word.
+A lookup costs about $0.0002.
+
+Without a key, or when the model fails or takes over six seconds, the Free
+Dictionary API (dictionaryapi.dev) answers, with Wiktionary as the fallback
+when it is down or has nothing, both free and keyless. English only. A clicked
+"running" or "cities" finds "run" and "city". When the Free Dictionary fails,
+the app skips it for five minutes rather than waiting on its timeout with
+every click.
 
 ## Evening reminder
 
