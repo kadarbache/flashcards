@@ -10,6 +10,7 @@ import { Sheet } from "@/components/sheet";
 import { field, iconButton, label, primaryButton } from "@/components/ui";
 import type { DictionaryEntry, LookupOutcome } from "@/lib/dictionary";
 import { findSavedCards, type SavedCard } from "@/lib/transcript";
+import { pickVoice } from "@/lib/voices";
 
 export interface DeckOption {
   id: string;
@@ -75,17 +76,37 @@ function canSpeak(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-/** The dictionary's recording when there is one, the browser's own voice otherwise. */
-function pronounce(entry: DictionaryEntry) {
-  const speak = () => {
-    if (!canSpeak()) return;
-    const utterance = new SpeechSynthesisUtterance(entry.word);
-    utterance.lang = "en-US";
+/** The device's voices. Chrome fills the list only after it is first asked for, so the sheet asks early. */
+function deviceVoices(): SpeechSynthesisVoice[] {
+  return canSpeak() ? window.speechSynthesis.getVoices() : [];
+}
+
+/** Failures worth a second try on a voice stored on the device; not a cancel or a newer word cutting in. */
+const VOICE_FAILURES = new Set(["network", "synthesis-unavailable", "synthesis-failed", "voice-unavailable"]);
+
+/** Say a word with the most natural voice the device has, rather than its default. */
+function sayAloud(text: string) {
+  if (!canSpeak()) return;
+  const say = (voice: SpeechSynthesisVoice | null, retry: boolean) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = voice?.lang ?? "en-US";
+    if (voice) utterance.voice = voice;
+    // Online voices need a connection. Without one, say it again offline.
+    if (retry && voice && !voice.localService) {
+      utterance.onerror = (event) => {
+        if (VOICE_FAILURES.has(event.error)) say(pickVoice(deviceVoices(), { localOnly: true }), false);
+      };
+    }
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   };
-  if (entry.audio) void new Audio(entry.audio).play().catch(speak);
-  else speak();
+  say(pickVoice(deviceVoices()), true);
+}
+
+/** The dictionary's recording when there is one, the device's best voice otherwise. */
+function pronounce(entry: DictionaryEntry) {
+  if (entry.audio) void new Audio(entry.audio).play().catch(() => sayAloud(entry.word));
+  else sayAloud(entry.word);
 }
 
 /** A definition as the back of a card: "(verb) to move fast on foot", the label style the app already reads. */
@@ -157,6 +178,11 @@ function SheetBody({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+
+  // Start the voice list loading now, so the best voice is known by the time the speaker is tapped.
+  useEffect(() => {
+    deviceVoices();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
