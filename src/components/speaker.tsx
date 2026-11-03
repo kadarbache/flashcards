@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { createClipPlayer, type Attempt } from "@/components/clip-player";
 import { SpeakIcon } from "@/components/icons";
 import { speakableText } from "@/lib/speakable";
 import { pickVoice } from "@/lib/voices";
@@ -41,23 +42,8 @@ function sayAloud(text: string) {
 
 // --- The AI voice's clips ----------------------------------------------------
 
-/**
- * Clips already played on this visit, by text. A word is fetched on its first
- * tap only: every later tap, on any card or in the word sheet, replays it from
- * memory until the page is closed. Most recently heard last.
- */
-const clips = new Map<string, HTMLAudioElement>();
-/** Plenty for a long session: each is about a second of sound, some 50 KB. */
-const MAX_CLIPS = 60;
-
-function keep(text: string, audio: HTMLAudioElement) {
-  clips.delete(text);
-  clips.set(text, audio);
-  if (clips.size > MAX_CLIPS) clips.delete(clips.keys().next().value as string);
-}
-
-/** How long a first tap waits for a new clip before the device speaks instead. */
-const WAIT_MS = 10_000;
+/** One for the whole page, so a word heard on a card replays at once in the word sheet, and the other way round. */
+const player = createClipPlayer({ load: (url) => new Audio(url) });
 
 const noSubscribe = () => () => {};
 
@@ -68,12 +54,9 @@ export const cardSpeaker =
 /**
  * A button that reads `text` aloud. With `aiVoice`, it plays the AI voice's
  * clip: the first tap asks the server for it (a few seconds when the word is
- * new, since it is made then and saved), later taps replay it from memory.
- * When there is no clip -- no AI voice, text it will not read, the free
- * allowance used up -- `recording` plays if given, otherwise the device's
- * best voice speaks.
- *
- * Sound is started inside the tap itself, which phones insist on.
+ * new), later taps replay it from memory without asking again. When there is no clip -- no AI voice, text it will
+ * not read, the free allowance used up -- `recording` plays if given,
+ * otherwise the device's best voice speaks.
  */
 export function SpeakerButton({
   text,
@@ -88,18 +71,18 @@ export function SpeakerButton({
   className: string;
 }) {
   const [loading, setLoading] = useState(false);
-  /** A clip still on its way from the server. */
-  const pending = useRef<HTMLAudioElement | null>(null);
+  /** A tap still waiting for its clip. */
+  const pending = useRef<Attempt | null>(null);
   // The server cannot tell whether the device can speak, so this is false until the page is live.
   const deviceCanSpeak = useSyncExternalStore(noSubscribe, canSpeak, () => false);
 
   // Load the device's voice list now, so the best voice is known by the first tap.
-  // A clip still on its way when the button goes (the sheet closes, the card moves
-  // on) is dropped, so it never speaks over whatever comes next.
+  // When the button goes (the sheet closes, the card moves on), a clip it is still
+  // waiting for stays silent, so it never speaks over whatever comes next.
   useEffect(() => {
     deviceVoices();
     return () => {
-      pending.current?.pause();
+      pending.current?.stop();
       pending.current = null;
     };
   }, [text]);
@@ -118,40 +101,16 @@ export function SpeakerButton({
       return;
     }
 
-    const saved = clips.get(words);
-    if (saved) {
-      keep(words, saved);
-      saved.currentTime = 0;
-      saved.play().catch(() => {
-        clips.delete(words);
-        fallback();
-      });
-      return;
+    const attempt = player.play(words);
+    if (attempt.waiting) {
+      pending.current = attempt;
+      setLoading(true);
     }
-
-    const audio = new Audio(`/api/speech?text=${encodeURIComponent(words)}`);
-    pending.current = audio;
-    let settled = false;
-    const settle = (played: boolean) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      setLoading(false);
-      // The button went away or moved to another word: this clip is not wanted.
-      if (pending.current !== audio) return;
-      pending.current = null;
-      if (played) {
-        keep(words, audio);
-      } else {
-        audio.pause();
-        fallback();
-      }
-    };
-    const timer = window.setTimeout(() => settle(false), WAIT_MS);
-    audio.addEventListener("playing", () => settle(true), { once: true });
-    audio.addEventListener("error", () => settle(false), { once: true });
-    setLoading(true);
-    audio.play().catch(() => settle(false));
+    void attempt.result.then((outcome) => {
+      if (pending.current === attempt) pending.current = null;
+      if (attempt.waiting) setLoading(false);
+      if (outcome === "failed") fallback();
+    });
   }
 
   return (
