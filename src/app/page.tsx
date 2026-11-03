@@ -5,6 +5,7 @@ import { GoalRing, LevelBar } from "@/components/game/hud";
 import { GoalStepper } from "@/components/goal-stepper";
 import {
   BoltIcon,
+  BossIcon,
   CheckIcon,
   ChevronIcon,
   FlameIcon,
@@ -15,6 +16,7 @@ import {
   StarIcon,
   SunIcon,
   SwapIcon,
+  TrophyIcon,
   VideoIcon,
 } from "@/components/icons";
 import { InstallCard } from "@/components/pwa";
@@ -22,11 +24,14 @@ import { ReminderCard } from "@/components/reminder-card";
 import { SetupNotice } from "@/components/setup-notice";
 import { panel } from "@/components/ui";
 import { MIN_BLITZ_CARDS } from "@/lib/blitz";
+import { BOSS_HEARTS, BOSS_MIN_LAPSES } from "@/lib/boss";
+import { getBossScreen, type BossScreen } from "@/lib/boss-db";
 import { listDecks, type DeckSummary } from "@/lib/decks";
 import { requestTimeZone } from "@/lib/request-time-zone";
 import { getPlayerStats, type PlayerStats } from "@/lib/stats";
 import type { TierCounts } from "@/lib/collection";
 import { getCollectionCounts } from "@/lib/collection-db";
+import { formatDay } from "@/lib/game";
 import { localReminderTime } from "@/lib/reminders";
 import { vapidKeys } from "@/lib/reminders-db";
 import { getWordOfTheDay, type WordOfTheDay } from "@/lib/word-of-the-day-db";
@@ -46,12 +51,14 @@ export default async function Home() {
   let player: PlayerStats;
   let word: WordOfTheDay;
   let collection: TierCounts;
+  let boss: BossScreen;
   try {
-    [decks, player, word, collection] = await Promise.all([
+    [decks, player, word, collection, boss] = await Promise.all([
       listDecks(),
       getPlayerStats(timeZone),
       getWordOfTheDay(timeZone),
       getCollectionCounts(),
+      getBossScreen(timeZone),
     ]);
   } catch (error) {
     // Most likely no MONGODB_URI, a bad password, or an Atlas IP allow-list
@@ -155,6 +162,7 @@ export default async function Home() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <WordTile word={word} />
+        <BossTile screen={boss} />
         <CollectionTile counts={collection} />
         <WatchTile />
       </div>
@@ -207,7 +215,7 @@ function WatchTile() {
   return (
     <Link
       href="/watch"
-      className="anim-rise group flex items-center gap-4 rounded-3xl bg-surface-raised p-4 transition hover:bg-surface-high active:scale-[0.99] md:col-span-2 sm:p-5 xl:col-span-1"
+      className="anim-rise group flex items-center gap-4 rounded-3xl bg-surface-raised p-4 transition hover:bg-surface-high active:scale-[0.99] sm:p-5 xl:col-span-3"
     >
       <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface-high text-again">
         <VideoIcon className="h-8 w-8" />
@@ -225,6 +233,66 @@ function WatchTile() {
         direction="right"
         className="h-5 w-5 shrink-0 text-ink-muted transition group-hover:translate-x-0.5"
       />
+    </Link>
+  );
+}
+
+/** The way into the boss fight, saying whether today's fight is still waiting. */
+function BossTile({ screen }: { screen: BossScreen }) {
+  const { boss, closest, trophies } = screen;
+  const status = boss?.status;
+  const waiting = status !== undefined && status.canFight && status.winnable;
+
+  let headline = "No boss right now";
+  let detail = `Words you forget ${BOSS_MIN_LAPSES} times become bosses`;
+  if (boss && status) {
+    if (status.phase === "defeated") {
+      headline = `You beat “${boss.front}”`;
+      detail = `Next boss ${formatDay(status.nextBossDay)}`;
+    } else if (waiting) {
+      headline = `“${boss.front}” is waiting`;
+      detail = `${status.hearts} of ${BOSS_HEARTS} hearts left · fight today`;
+    } else if (status.today === "knew") {
+      headline = `Hit “${boss.front}”`;
+      detail = `${status.hearts} ${status.hearts === 1 ? "heart" : "hearts"} left · back tomorrow`;
+    } else {
+      headline = `“${boss.front}” is here`;
+      detail = status.today === "missed" ? "It healed · back tomorrow" : "It gets away soon";
+    }
+  } else if (closest) {
+    detail = `“${closest.front}” has slipped ${closest.lapses} of ${BOSS_MIN_LAPSES} times`;
+  }
+
+  return (
+    <Link
+      href="/boss"
+      className={`anim-rise group flex items-center gap-4 rounded-3xl border p-4 transition active:scale-[0.99] sm:p-5 ${
+        waiting
+          ? "border-[#6b1f30] bg-[#2a0f16] hover:bg-[#33121b]"
+          : "border-transparent bg-surface-raised hover:bg-surface-high"
+      }`}
+    >
+      <span
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+          waiting ? "anim-pulse bg-again text-paper-ink" : "bg-surface-high text-again"
+        }`}
+      >
+        <BossIcon className="h-9 w-9" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-extrabold tracking-wide text-again uppercase">Boss fight</span>
+        <span className="block truncate text-lg font-extrabold">{headline}</span>
+        <span className="mt-0.5 flex items-center gap-3 text-sm text-ink-muted">
+          <span className="truncate">{detail}</span>
+          {trophies.length > 0 && (
+            <span className="flex shrink-0 items-center gap-1 font-bold text-gold tabular-nums">
+              <TrophyIcon className="h-3.5 w-3.5" />
+              {trophies.length}
+            </span>
+          )}
+        </span>
+      </span>
+      <ChevronIcon direction="right" className="h-5 w-5 shrink-0 text-ink-muted transition group-hover:translate-x-0.5" />
     </Link>
   );
 }

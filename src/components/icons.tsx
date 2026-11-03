@@ -378,3 +378,19 @@ export function UserIcon({ className }: IconProps) {
     </Line>
   );
 }
+
+/** A horned face, for boss words. Filled, like the other game pieces; the face takes `currentColor`. */
+export function BossIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className ?? "h-6 w-6"}>
+      <path d="M3 2.5c.3 3.4 1.6 5.8 3.7 7l2.1-1.8C6.6 6.9 4.6 5.3 3 2.5z" fill="currentColor" />
+      <path d="M21 2.5c-.3 3.4-1.6 5.8-3.7 7l-2.1-1.8c2.2-.8 4.2-2.4 5.8-5.2z" fill="currentColor" />
+      <path
+        d="M12 6.5c-4.4 0-7.5 3-7.5 7 0 2.6 1.3 4.6 3.3 5.7V21a1 1 0 0 0 1 1h6.4a1 1 0 0 0 1-1v-1.8c2-1.1 3.3-3.1 3.3-5.7 0-4-3.1-7-7.5-7z"
+        fill="currentColor"
+      />
+      <path d="M7.4 12.3l3.6 1.5-.5 1.9-2.6-.7-.5-2.7zM16.6 12.3 13 13.8l.5 1.9 2.6-.7.5-2.7z" fill="#16122B" />
+      <path d="M10 18.6h4" stroke="#16122B" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}

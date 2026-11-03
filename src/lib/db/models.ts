@@ -147,6 +147,45 @@ const dailyWordSchema = new Schema(
 );
 
 /**
+ * A boss: a word you keep forgetting, back for a week to be beaten. One row
+ * per boss. Like the daily word, the word is copied onto the row, so the
+ * trophy case still reads right after the card is edited or deleted.
+ */
+const bossSchema = new Schema(
+  {
+    /** The first and last day of its stay, YYYY-MM-DD on the player's calendar. */
+    startDay: { type: String, required: true, unique: true },
+    endDay: { type: String, required: true },
+    cardId: { type: Schema.Types.ObjectId, ref: "Card", required: true },
+    deckId: { type: Schema.Types.ObjectId, ref: "Deck", required: true },
+    deckName: { type: String, default: "" },
+    front: { type: String, required: true },
+    back: { type: String, required: true },
+    /** How many times the card had lapsed when it became a boss. */
+    lapses: { type: Number, required: true },
+    /** One fight a day, oldest first. */
+    answers: {
+      type: [
+        {
+          _id: false,
+          day: { type: String, required: true },
+          result: { type: String, enum: [...WORD_RESULTS], required: true },
+        },
+      ],
+      default: [],
+    },
+    /** The day it was beaten, or null. */
+    defeatedOn: { type: String, default: null },
+    /** XP the win earned. It counts towards the player's XP like an answer's. */
+    xp: { type: Number, default: 0 },
+  },
+  { timestamps: true },
+);
+
+// The trophy case: bosses by the day they were beaten.
+bossSchema.index({ defeatedOn: -1 });
+
+/**
  * A phone or browser that turned reminders on. One row per push subscription:
  * the endpoint is the address the browser's push service gave it, and the
  * keys encrypt what is sent there.
@@ -197,6 +236,7 @@ transcriptSchema.index({ updatedAt: -1 });
 export type DeckDocument = InferSchemaType<typeof deckSchema>;
 export type TranscriptDocument = InferSchemaType<typeof transcriptSchema>;
 export type DailyWordDocument = InferSchemaType<typeof dailyWordSchema>;
+export type BossDocument = InferSchemaType<typeof bossSchema>;
 export type PushDeviceDocument = InferSchemaType<typeof pushDeviceSchema>;
 export type ProfileDocument = InferSchemaType<typeof profileSchema>;
 export type CardDocument = InferSchemaType<typeof cardSchema>;
@@ -239,6 +279,10 @@ export const Profile: Model<ProfileDocument> =
 dropStaleModel("DailyWord");
 export const DailyWord: Model<DailyWordDocument> =
   (models.DailyWord as Model<DailyWordDocument>) || model("DailyWord", dailyWordSchema);
+
+dropStaleModel("Boss");
+export const Boss: Model<BossDocument> =
+  (models.Boss as Model<BossDocument>) || model("Boss", bossSchema);
 
 dropStaleModel("PushDevice");
 export const PushDevice: Model<PushDeviceDocument> =

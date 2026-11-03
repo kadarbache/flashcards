@@ -76,6 +76,7 @@ src/lib/
   stats.ts            the player's XP, level and streak from the history
   blitz.ts            Blitz questions built from a deck's own cards (pure)
   word-of-the-day.ts  Word of the Day record and streak (pure); -db.ts picks and saves
+  boss.ts             boss words: hearts, fights and picking (pure); -db.ts saves
   collection.ts       Bronze/Silver/Gold ranks from a card's interval (pure)
   reminders.ts        evening reminder wording and timing (pure); -db.ts sends
   import.ts           pasted text -> cards (pure)
@@ -96,6 +97,7 @@ src/app/
   decks/[id]/practice/  ungraded practice, outside the scheduler
   decks/[id]/blitz/   timed multiple choice, outside the scheduler
   word/               Word of the Day, one learned word a day
+  boss/               the boss fight: a word you keep forgetting, back for a week
   collection/         the album: every word with its medal
   watch/              a YouTube video with its transcript; tap words to keep them
   api/cron/reminders/ the evening reminder job, called by Vercel Cron
@@ -184,6 +186,7 @@ when a card comes back.
 - **Combo.** Answers with no pause longer than 20 seconds between them build a
   run: x1.5 XP from 3 in a row, x2 from 6.
 - **Levels.** Level n needs 200 + 50(n-1) XP. Ranks go from Rookie to Sage.
+  Beating a boss adds 150 XP on top of the answers.
 - **Daily goal and streak.** A day counts when its answers reach the goal (20
   to start, set with - and + on the home screen). Days in a row make the
   streak. Days follow the browser's time zone, which the app keeps in a `tz`
@@ -210,6 +213,24 @@ copied onto that day's row so the history still reads right after a card is
 edited or deleted. Words from the last 30 days are not picked again while others
 are left. Days follow your time zone, like the streak. It never touches a card's
 schedule.
+
+## Boss words
+
+A word you keep forgetting comes back as a boss. A card that has lapsed three
+times or more (learned, then forgotten in review) becomes the boss for seven
+days, the one that has slipped most often first. Once a day you fight it on
+`/boss`: read the word, flip, and say whether you knew it. Three days in a row
+beats it: it goes into the trophy case and is worth 150 XP. A miss, or a day
+without a fight, heals it back to three hearts. A boss not beaten in its seven
+days gets away; the next boss comes the day after its week ends, and one that
+got away sits out a week while another word qualifies.
+
+Like Word of the Day, a fight never touches the card's schedule: it is a
+self-graded check on top. Each boss is a row in `bosses`, with the word copied
+onto it so the trophy case survives the card being edited or deleted. A beaten
+boss only comes back if it lapses again after being chosen. Its 150 XP is
+stored on the row and added to the answers' XP, the same way an answer's XP
+lives on its history row.
 
 ## Collection
 
@@ -300,9 +321,10 @@ device speaks instead, with the most natural English voice it has: Edge's
 ## Evening reminder
 
 Turn it on from the home screen, per device. Once a day the job at
-`/api/cron/reminders` checks today: if the daily goal is not met or today's word
-is still waiting, every device gets one notification ("Your 12-day streak ends
-in 3 hours"). A day that is already done gets nothing.
+`/api/cron/reminders` checks today: if the daily goal is not met, today's word
+is still waiting, or a boss that can still be beaten has not been fought, every
+device gets one notification ("Your 12-day streak ends in 3 hours"), in that
+order of importance. A day that is already done gets nothing.
 
 It needs three environment variables, made by:
 

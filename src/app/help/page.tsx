@@ -5,6 +5,7 @@ import {
   ArrowIcon,
   BellIcon,
   BoltIcon,
+  BossIcon,
   DownloadIcon,
   FlameIcon,
   FlipIcon,
@@ -16,6 +17,7 @@ import {
   SwapIcon,
 } from "@/components/icons";
 import { panel, primaryButton } from "@/components/ui";
+import { BOSS_DAYS, BOSS_HEARTS, BOSS_MIN_LAPSES, BOSS_XP } from "@/lib/boss";
 import { COMBO_PAUSE_MS, DEFAULT_DAILY_GOAL, XP_PER_ANSWER } from "@/lib/game";
 
 export const metadata: Metadata = { title: "How to play · Flashcards" };
@@ -234,6 +236,19 @@ export default function HelpPage() {
         </p>
       </section>
 
+      <section className={`${panel} space-y-3`}>
+        <h2 className="flex items-center gap-2 text-lg font-extrabold">
+          <BossIcon className="h-6 w-6 text-again" />
+          Boss fight
+        </h2>
+        <p className="text-ink-muted">
+          A word you have forgotten in review {BOSS_MIN_LAPSES} times comes back as a boss for{" "}
+          {BOSS_DAYS} days. Fight it once a day: flip it and say honestly whether you knew it. Know it{" "}
+          {BOSS_HEARTS} days in a row to beat it, for {BOSS_XP} XP and a place in your trophy case. A
+          miss, or a day you skip, heals it. Fights never change your schedule.
+        </p>
+      </section>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
         <section className={`${panel} space-y-3`}>
           <h2 className="flex items-center gap-2 text-lg font-extrabold">
@@ -254,9 +269,9 @@ export default function HelpPage() {
           </h2>
           <p className="text-ink-muted">
             Turn it on from the home screen, on each phone or computer you use. Once a day in the
-            evening, if your goal is not done or today&apos;s word is still waiting, you get one
-            notification. On a day that is already done, nothing comes. On iPhone, add the app to
-            your Home Screen first.
+            evening, if your goal is not done, today&apos;s word is still waiting or the boss has
+            not been fought, you get one notification. On a day that is already done, nothing
+            comes. On iPhone, add the app to your Home Screen first.
           </p>
         </section>
       </div>

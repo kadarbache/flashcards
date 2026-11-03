@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import mongoose from "mongoose";
 
 import { requireSession } from "@/lib/auth-guard";
+import { fightBoss, type BossOutcome } from "@/lib/boss-db";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Card, Deck, ReviewLog } from "@/lib/db/models";
 import {
@@ -336,6 +337,21 @@ export async function answerDailyWord(day: string, result: WordResult): Promise<
   if (outcome.ok) {
     revalidatePath("/");
     revalidatePath("/word");
+  }
+  return outcome;
+}
+
+/** Boss fight: say whether you knew the boss's word today. Returns where the boss stands. */
+export async function answerBossFight(
+  startDay: string,
+  day: string,
+  result: WordResult,
+): Promise<BossOutcome> {
+  await requireSession();
+  const outcome = await fightBoss(startDay, day, result, await requestTimeZone());
+  if (outcome.ok) {
+    revalidatePath("/");
+    revalidatePath("/boss");
   }
   return outcome;
 }

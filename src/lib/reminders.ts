@@ -1,7 +1,8 @@
 /**
  * Phone reminders: once a day, in the evening, a notification if today still
- * needs something -- the daily goal that keeps the streak, or today's Word of
- * the Day. Nothing is sent on a day that is already done.
+ * needs something -- the daily goal that keeps the streak, today's Word of the
+ * Day, or a fight with the boss. Nothing is sent on a day that is already
+ * done.
  *
  * This file is the wording and the timing, with no database or network, so it
  * can be tested on its own. Sending lives in `reminders-db.ts`.
@@ -26,6 +27,8 @@ export interface ReminderState {
   todayDone: boolean;
   /** Today's Word of the Day exists and has not been answered. */
   wordWaiting: boolean;
+  /** A boss can still be beaten and has not been fought today. */
+  bossWaiting: boolean;
 }
 
 export interface ReminderMessage {
@@ -54,10 +57,17 @@ function timeLeft(hours: number): string {
   return "under an hour";
 }
 
-/** What to say tonight, or null when today is already done. */
+/**
+ * What to say tonight, or null when there is nothing left to do. The goal
+ * comes first, then today's word, then the boss.
+ */
 export function reminderMessage(state: ReminderState, hoursLeft: number): ReminderMessage | null {
   const left = Math.max(0, state.goal - state.today);
-  const word = state.wordWaiting ? " Today's word is waiting too." : "";
+  const word = state.wordWaiting
+    ? " Today's word is waiting too."
+    : state.bossWaiting
+      ? " The boss is waiting too."
+      : "";
 
   if (!state.todayDone) {
     const cards = `${left} more ${left === 1 ? "card" : "cards"}`;
@@ -80,6 +90,14 @@ export function reminderMessage(state: ReminderState, hoursLeft: number): Remind
       title: "Today's word is waiting",
       body: "Goal done. One more card: do you still know it?",
       url: "/word",
+    };
+  }
+
+  if (state.bossWaiting) {
+    return {
+      title: "The boss is waiting",
+      body: "Goal done. Fight it before midnight, or it heals.",
+      url: "/boss",
     };
   }
 

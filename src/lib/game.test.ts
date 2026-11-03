@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  addDays,
   clampGoal,
   COMBO_PAUSE_MS,
   dayKey,
+  daysBetween,
   lastSevenDays,
   levelFromXp,
   multiplierFor,
@@ -73,6 +75,13 @@ describe("days", () => {
   it("steps back across months and years", () => {
     assert.equal(previousDay("2026-03-01"), "2026-02-28");
     assert.equal(previousDay("2027-01-01"), "2026-12-31");
+  });
+
+  it("steps forward and counts the days between", () => {
+    assert.equal(addDays("2026-12-29", 6), "2027-01-04");
+    assert.equal(addDays("2026-11-03", -7), "2026-10-27");
+    assert.equal(daysBetween("2026-10-30", "2026-11-02"), 3);
+    assert.equal(daysBetween("2026-11-02", "2026-10-30"), -3);
   });
 
   it("falls back to UTC for an unknown time zone", () => {

@@ -1,5 +1,6 @@
 import webpush from "web-push";
 
+import { getBossScreen } from "@/lib/boss-db";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Profile, PushDevice } from "@/lib/db/models";
 import { dayKey, safeTimeZone } from "@/lib/game";
@@ -143,10 +144,12 @@ export async function runReminders(now: Date = new Date(), send: Sender = webPus
     return { sent: 0, removed: 0, failed: 0, skipped: "already sent today" };
   }
 
-  const [player, word] = await Promise.all([
+  const [player, word, boss] = await Promise.all([
     getPlayerStats(timeZone, now),
     getWordOfTheDay(timeZone, now),
+    getBossScreen(timeZone, now),
   ]);
+  const fight = boss.boss?.status;
   const message = reminderMessage(
     {
       streak: player.streak,
@@ -154,6 +157,7 @@ export async function runReminders(now: Date = new Date(), send: Sender = webPus
       goal: player.goal,
       todayDone: player.todayDone,
       wordWaiting: word.today !== null && word.today.result === null,
+      bossWaiting: fight !== undefined && fight.canFight && fight.winnable,
     },
     hoursUntilMidnight(now, timeZone),
   );

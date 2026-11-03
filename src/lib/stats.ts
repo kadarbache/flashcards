@@ -1,3 +1,4 @@
+import { bossXp } from "@/lib/boss-db";
 import { connectToDatabase } from "@/lib/db/connect";
 import { Profile, ReviewLog } from "@/lib/db/models";
 import type { NextCardResult } from "@/lib/decks";
@@ -63,8 +64,9 @@ export async function setDailyGoal(goal: number): Promise<number> {
  * XP, level, today's count and the streak, all read from the answer history.
  *
  * Nothing here is stored as a running total: XP is the sum of what each answer
- * earned, so an undo -- which deletes the answer -- takes its XP back without
- * any bookkeeping. Days are cut on the player's calendar, not the server's.
+ * earned, plus each beaten boss, so an undo -- which deletes the answer --
+ * takes its XP back without any bookkeeping. Days are cut on the player's
+ * calendar, not the server's.
  */
 export async function getPlayerStats(
   timeZoneRaw: string,
@@ -73,10 +75,11 @@ export async function getPlayerStats(
   const timeZone = safeTimeZone(timeZoneRaw);
   await connectToDatabase();
 
-  const [xpRows, dayRows, goal] = await Promise.all([
+  const [xpRows, beatenXp, dayRows, goal] = await Promise.all([
     ReviewLog.aggregate<{ xp: number }>([
       { $group: { _id: null, xp: { $sum: { $ifNull: ["$xp", XP_PER_ANSWER] } } } },
     ]),
+    bossXp(),
     ReviewLog.aggregate<{ _id: string; count: number }>([
       { $match: { reviewedAt: { $gte: new Date(now.getTime() - HISTORY_DAYS * DAY_MS) } } },
       {
@@ -89,7 +92,7 @@ export async function getPlayerStats(
     getDailyGoal(),
   ]);
 
-  const xp = xpRows[0]?.xp ?? 0;
+  const xp = (xpRows[0]?.xp ?? 0) + beatenXp;
   const counts = new Map(dayRows.map((row) => [row._id, row.count]));
   const today = dayKey(now, timeZone);
   const streak = streakFrom(counts, today, goal);

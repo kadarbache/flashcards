@@ -100,9 +100,19 @@ function parseDay(day: string): Date {
 
 /** The calendar day before a YYYY-MM-DD day. */
 export function previousDay(day: string): string {
+  return addDays(day, -1);
+}
+
+/** The YYYY-MM-DD day `count` days after `day` (before it, when negative). */
+export function addDays(day: string, count: number): string {
   const date = parseDay(day);
-  date.setUTCDate(date.getUTCDate() - 1);
+  date.setUTCDate(date.getUTCDate() + count);
   return date.toISOString().slice(0, 10);
+}
+
+/** Whole days from `from` to `to`: 1 for the next day, negative when `to` is earlier. */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((parseDay(to).getTime() - parseDay(from).getTime()) / 86_400_000);
 }
 
 /** "2026-10-31" -> "Sat 31 Oct". `weekday: "long"` gives "Saturday 31 Oct". */

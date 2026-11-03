@@ -10,7 +10,7 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 
 import { connectToDatabase } from "@/lib/db/connect";
-import { Card, DailyWord, Deck, Profile, PushDevice, ReviewLog } from "@/lib/db/models";
+import { Boss, Card, DailyWord, Deck, Profile, PushDevice, ReviewLog } from "@/lib/db/models";
 import {
   hoursUntilMidnight,
   localReminderTime,
@@ -27,7 +27,14 @@ import {
   type Sender,
 } from "@/lib/reminders-db";
 
-const base = { streak: 0, today: 0, goal: 20, todayDone: false, wordWaiting: false };
+const base = {
+  streak: 0,
+  today: 0,
+  goal: 20,
+  todayDone: false,
+  wordWaiting: false,
+  bossWaiting: false,
+};
 
 describe("reminderMessage", () => {
   it("warns about a streak about to break", () => {
@@ -50,6 +57,16 @@ describe("reminderMessage", () => {
 
   it("stays quiet on a day that is done", () => {
     assert.equal(reminderMessage({ ...base, todayDone: true, today: 25 }, 3), null);
+  });
+
+  it("sends you to the boss once the goal and the word are done", () => {
+    const done = { ...base, todayDone: true, today: 20, bossWaiting: true };
+    assert.equal(reminderMessage(done, 3)?.url, "/boss");
+    assert.equal(reminderMessage({ ...done, wordWaiting: true }, 3)?.url, "/word");
+    assert.equal(
+      reminderMessage({ ...base, today: 10, bossWaiting: true }, 3)?.body,
+      "10 more cards is all it takes. The boss is waiting too.",
+    );
   });
 
   it("says the time left in plain words", () => {
@@ -125,6 +142,7 @@ describe("the reminder job", () => {
       Profile.deleteMany({}),
       PushDevice.deleteMany({}),
       DailyWord.deleteMany({}),
+      Boss.deleteMany({}),
     ]);
   });
 
@@ -180,6 +198,16 @@ describe("the reminder job", () => {
     const run = await runReminders(evening, send);
     assert.equal(run.skipped, "today is done");
     assert.equal(sent.length, 0);
+  });
+
+  it("points at a boss still to fight once the goal is done", async () => {
+    await saveDevice(phone, "Africa/Nairobi");
+    await answered(20, new Date("2026-11-02T09:00:00Z"));
+    const deck = await Deck.create({ name: "Hard words" });
+    await Card.create({ deckId: deck._id, front: "ubiquitous", back: "everywhere", state: "relearning", lapses: 4 });
+    const { sent, send } = recorder();
+    await runReminders(new Date("2026-11-02T17:00:00Z"), send);
+    assert.equal(sent[0]?.message.url, "/boss");
   });
 
   it("drops a device the push service says is gone", async () => {

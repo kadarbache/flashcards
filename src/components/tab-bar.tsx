@@ -8,6 +8,7 @@ import { signOutAction } from "@/app/login/actions";
 import { DeckForm } from "@/components/deck-form";
 import {
   AlbumIcon,
+  BossIcon,
   CloseIcon,
   HelpIcon,
   HomeIcon,
@@ -55,7 +56,7 @@ const tabOff = "text-ink-muted hover:text-ink";
 /**
  * The navigation on phones, at the bottom where a thumb reaches it, in place
  * of the header. Home, videos, a big button for a new deck, Word of the Day,
- * and "More" for the album, help, sound and signing out.
+ * and "More" for the boss, the album, help, sound and signing out.
  */
 export function TabBar() {
   const pathname = usePathname();
@@ -73,7 +74,8 @@ export function TabBar() {
 
   const close = () => setSheet(null);
   const [home, watch, word] = TABS;
-  const moreActive = sheet === "more" || pathname.startsWith("/collection") || pathname.startsWith("/help");
+  const moreActive =
+    sheet === "more" || ["/collection", "/help", "/boss"].some((path) => pathname.startsWith(path));
 
   return (
     <>
@@ -128,6 +130,15 @@ export function TabBar() {
         <div className={sheetBody}>
           <SheetTitle title="More" onClose={close} />
           <ul className="space-y-1">
+            <li>
+              <Link href="/boss" onClick={close} className={row}>
+                <BossIcon className="h-5 w-5 text-again" />
+                <span>
+                  <span className="block font-bold">Boss fight</span>
+                  <span className="block text-xs text-ink-muted">The word you keep forgetting, and your trophies</span>
+                </span>
+              </Link>
+            </li>
             <li>
               <Link href="/collection" onClick={close} className={row}>
                 <AlbumIcon className="h-5 w-5 text-gold" />
