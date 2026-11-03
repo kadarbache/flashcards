@@ -83,7 +83,7 @@ src/lib/
   transcript-sources.ts  YouTube and Supadata; transcripts-db.ts saves and serves
   dictionary.ts       word lookups: Free Dictionary, then Wiktionary
   ai-meaning.ts       a word's meaning in its sentence, from an AI model on OpenRouter
-  pronunciation.ts    a word read aloud by a Gemini voice, made once and saved
+  pronunciation.ts    a word read aloud by a Gemini voice; the phone keeps the clips
   speakable.ts        which text the voice will read (pure)
   voices.ts           the device's most natural English voice, for when there is none (pure)
   db/                 Mongoose connection and models
@@ -281,10 +281,15 @@ every click.
 `GEMINI_API_KEY` is set (a free key from aistudio.google.com/apikey). The
 speaker sits in the word sheet and on the answer side of every flashcard
 (review, practice, Word of the Day). The first tap on a new word asks Google,
-which takes two to four seconds; the clip is trimmed of its silence and saved
-in the database, so it is made once for good, for every device. The app keeps
-each clip it has played in memory, so tapping again replays it without asking
-the server until the page is closed. `GEMINI_VOICE` picks the voice (Kore
+which takes two to four seconds, and the clip is trimmed of its silence.
+Nothing is saved on the server or in the database: the phone keeps the clips.
+The service worker stores each one it gets (about 50 KB a word, up to 2,000
+words) and plays it from there on every later tap, after a restart, and
+offline, so each phone asks for a word once. A new phone, or clearing the
+browser's data, starts again. Within a visit the app also holds clips in
+memory, and a tap while a clip is still on its way waits for it rather than
+sending another request; on the server, two requests for a word at once share
+one call to Google. `GEMINI_VOICE` picks the voice (Kore
 unless set; any of Google's 30 prebuilt voices) and `GEMINI_VOICE_MODEL` the
 model (`gemini-3.8-flash-lite-tts` unless set). The free tier allows three new
 words a minute per model, so when the first is used up `gemini-3.8-flash-tts`
@@ -335,9 +340,9 @@ it.
 ## Installing it on a phone
 
 The app is a Progressive Web App: a manifest, icons, and a small service worker
-(`public/sw.js`) that keeps the build files and shows an offline page when
-there is no network. Pages themselves are never cached, since they hold live
-data behind the sign-in.
+(`public/sw.js`) that keeps the build files and the AI voice's clips, and shows
+an offline page when there is no network. Pages themselves are never cached,
+since they hold live data behind the sign-in.
 
 Installing needs HTTPS, so do it from the deployed site, not from `localhost`:
 
@@ -347,7 +352,8 @@ Installing needs HTTPS, so do it from the deployed site, not from `localhost`:
 - **Desktop (Chrome or Edge):** the install icon in the address bar.
 
 The service worker is only registered in production builds, because in
-development it would cache files that hot reload keeps replacing.
+development it would cache files that hot reload keeps replacing. So in
+development the voice's clips last only as long as the browser's own cache.
 
 ## HTTP API
 

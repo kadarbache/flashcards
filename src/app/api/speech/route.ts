@@ -5,9 +5,10 @@ import { speakableText } from "@/lib/speakable";
 /**
  * GET /api/speech?text=essence
  *
- * A word read aloud by the AI voice, as a WAV. Each word is made once and
- * then served from the database. Answers 404 when no voice is set up and 503
- * when the voice fails, and the app then speaks with the device's own voice.
+ * A word read aloud by the AI voice, as a WAV. Nothing is kept on the server:
+ * the phone keeps each clip (public/sw.js), so it asks for a word once.
+ * Answers 404 when no voice is set up and 503 when the voice fails, and the
+ * app then speaks with the device's own voice.
  */
 export async function GET(request: Request) {
   // The proxy sends visitors to the login page; this is the check that counts.
@@ -20,24 +21,20 @@ export async function GET(request: Request) {
   const text = speakableText(new URL(request.url).searchParams.get("text"));
   if (!text) return new Response(null, { status: 400 });
 
-  let audio: Buffer | null = null;
-  try {
-    audio = await pronunciationOf(text, {
-      apiKey,
-      model: process.env.GEMINI_VOICE_MODEL,
-      voice: process.env.GEMINI_VOICE,
-    });
-  } catch (error) {
-    console.warn("Could not read the saved pronunciation:", error);
-  }
+  const audio = await pronunciationOf(text, {
+    apiKey,
+    model: process.env.GEMINI_VOICE_MODEL,
+    voice: process.env.GEMINI_VOICE,
+  });
   if (!audio) return new Response(null, { status: 503 });
 
   return new Response(new Uint8Array(audio), {
     headers: {
       "content-type": "audio/wav",
       "content-length": String(audio.length),
-      // A word sounds the same tomorrow. A week, so a new GEMINI_VOICE shows up in time.
-      "cache-control": "private, max-age=604800",
+      // A word sounds the same next year. This lets the browser's own cache
+      // keep it too, where the service worker is not running yet.
+      "cache-control": "private, max-age=31536000, immutable",
     },
   });
 }

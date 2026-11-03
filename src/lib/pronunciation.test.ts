@@ -1,15 +1,10 @@
 /**
  * The AI voice: the WAV it hands back, the request Gemini is sent, and that
- * each word is made once and then served saved.
+ * two requests for a word at once share one answer.
  */
 import assert from "node:assert/strict";
-import { after, afterEach, before, beforeEach, describe, it, mock } from "node:test";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
 
-import { MongoMemoryServer } from "mongodb-memory-server";
-import mongoose from "mongoose";
-
-import { connectToDatabase } from "@/lib/db/connect";
-import { Pronunciation } from "@/lib/db/models";
 import {
   DEFAULT_VOICE,
   DEFAULT_VOICE_MODEL,
@@ -178,59 +173,57 @@ describe("synthesize", () => {
 });
 
 describe("pronunciationOf", () => {
-  let mongo: MongoMemoryServer;
-
-  before(
-    async () => {
-      mongo = await MongoMemoryServer.create();
-      process.env.MONGODB_URI = mongo.getUri();
-      process.env.MONGODB_DB = "flashcards_pronunciation_test";
-      await connectToDatabase();
-      await Pronunciation.init();
-    },
-    { timeout: 300_000 },
-  );
-
-  after(async () => {
-    await mongoose.disconnect();
-    await mongo.stop();
-  });
-
-  beforeEach(async () => {
-    await Pronunciation.deleteMany({});
-    mock.method(console, "warn", () => {});
-  });
+  beforeEach(() => mock.method(console, "warn", () => {}));
   afterEach(() => mock.restoreAll());
 
-  it("makes a word once, then serves the saved clip", async () => {
-    let asked = 0;
-    const fetchImpl = async () => {
-      asked += 1;
+  /** A voice that takes a moment, so two requests can meet while it works. */
+  function slowVoice() {
+    const calls: string[] = [];
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      calls.push(JSON.parse(String(init?.body)).generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName);
+      await new Promise((resolve) => setTimeout(resolve, 30));
       return answer(paddedWord());
     };
+    return { calls, fetchImpl };
+  }
 
-    const first = await pronunciationOf("essence", { apiKey: "k", fetchImpl });
-    const second = await pronunciationOf("essence", { apiKey: "k", fetchImpl });
+  it("asks Google once when the word is asked for again before the first answer", async () => {
+    const { calls, fetchImpl } = slowVoice();
 
-    assert.equal(asked, 1, "Gemini is asked only the first time");
+    const [first, second] = await Promise.all([
+      pronunciationOf("essence", { apiKey: "k", fetchImpl }),
+      pronunciationOf("essence", { apiKey: "k", fetchImpl }),
+    ]);
+
+    assert.equal(calls.length, 1);
     assert.ok(first && second);
     assert.deepEqual(second, first);
-    assert.equal(await Pronunciation.countDocuments({ text: "essence", voice: DEFAULT_VOICE }), 1);
   });
 
-  it("keeps each voice's clip apart", async () => {
-    const fetchImpl = async () => answer(paddedWord());
+  it("keeps nothing once a clip is sent: the phone keeps it", async () => {
+    const { calls, fetchImpl } = slowVoice();
     await pronunciationOf("essence", { apiKey: "k", fetchImpl });
-    await pronunciationOf("essence", { apiKey: "k", voice: "Puck", fetchImpl });
-    assert.equal(await Pronunciation.countDocuments({ text: "essence" }), 2);
+    await pronunciationOf("essence", { apiKey: "k", fetchImpl });
+    assert.equal(calls.length, 2);
   });
 
-  it("saves nothing when the voice fails, so the next tap tries again", async () => {
+  it("keeps each voice apart", async () => {
+    const { calls, fetchImpl } = slowVoice();
+    await Promise.all([
+      pronunciationOf("essence", { apiKey: "k", fetchImpl }),
+      pronunciationOf("essence", { apiKey: "k", voice: "Puck", fetchImpl }),
+    ]);
+    assert.deepEqual(calls.sort(), [DEFAULT_VOICE, "Puck"].sort());
+  });
+
+  it("forgets a failure, so the next tap tries again", async () => {
     const audio = await pronunciationOf("essence", {
       apiKey: "k",
       fetchImpl: async () => new Response("", { status: 503 }),
     });
     assert.equal(audio, null);
-    assert.equal(await Pronunciation.countDocuments({}), 0);
+
+    const retried = await pronunciationOf("essence", { apiKey: "k", fetchImpl: async () => answer(paddedWord()) });
+    assert.ok(retried);
   });
 });

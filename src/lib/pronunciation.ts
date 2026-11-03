@@ -1,5 +1,3 @@
-import { connectToDatabase } from "@/lib/db/connect";
-import { Pronunciation } from "@/lib/db/models";
 import type { FetchLike } from "@/lib/transcript-sources";
 
 /**
@@ -7,10 +5,10 @@ import type { FetchLike } from "@/lib/transcript-sources";
  * like a person than the voices built into phones and browsers. Free with a
  * key from Google AI Studio (GEMINI_API_KEY), within a daily allowance.
  *
- * A voice takes two or three seconds to answer, so each word is made once and
- * saved: after that it plays at once, on every device, without touching the
- * allowance. Without a key, or when Google fails, the app falls back to the
- * device's own voice.
+ * Nothing is kept here: the phone keeps each clip it gets (see public/sw.js),
+ * so a word is asked for once per device and plays from the phone after that.
+ * Without a key, or when Google fails, the app falls back to the device's own
+ * voice.
  */
 
 /** Google's quick text-to-speech model, on the free tier. GEMINI_VOICE_MODEL picks another. */
@@ -27,8 +25,8 @@ export const DEFAULT_VOICE = "Kore";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 /**
  * Usually two or three seconds, now and then over ten. The app stops waiting
- * sooner and speaks with the device, but a slow clip is still saved here, so
- * the next tap on that word plays it.
+ * sooner and speaks with the device, but a slow clip still reaches the phone,
+ * which keeps it for the next tap on that word.
  */
 const TIMEOUT_MS = 20_000;
 
@@ -103,7 +101,7 @@ const MARGIN_SECONDS = 0.06;
 /**
  * Cut the silence before and after the word. The voice pads its answers,
  * often to twice the length of the word, which would only delay playback
- * and fill the database. A file it cannot read comes back untouched.
+ * and take up room on the phone. A file it cannot read comes back untouched.
  */
 export function trimSilence(file: Buffer): Buffer {
   const wav = readWav(file);
@@ -202,20 +200,20 @@ export async function synthesize(text: string, options: VoiceOptions): Promise<B
 }
 
 /**
- * `text` read aloud: the saved clip when there is one, otherwise a new one
- * from Gemini, saved for next time. Null when the voice fails.
+ * Clips being made right now, by voice and text. A request for a word that
+ * arrives while Google is still making it -- the audio player asking twice,
+ * say -- shares that answer instead of asking Google a second time.
  */
-export async function pronunciationOf(text: string, options: VoiceOptions): Promise<Buffer | null> {
+const underWay = new Map<string, Promise<Buffer | null>>();
+
+/** `text` read aloud by Gemini. Null when the voice fails. Nothing is kept once it is sent. */
+export function pronunciationOf(text: string, options: VoiceOptions): Promise<Buffer | null> {
   const voice = options.voice?.trim() || DEFAULT_VOICE;
-  await connectToDatabase();
+  const key = `${voice}\n${text}`;
+  const known = underWay.get(key);
+  if (known) return known;
 
-  const saved = await Pronunciation.findOne({ text, voice }).select({ audio: 1 });
-  if (saved) return Buffer.from(saved.audio);
-
-  const audio = await synthesize(text, { ...options, voice });
-  if (!audio) return null;
-  // Two taps at once may both get here; the unique index keeps one, and the
-  // other's duplicate-key error does not matter.
-  await Pronunciation.updateOne({ text, voice }, { $setOnInsert: { audio } }, { upsert: true }).catch(() => {});
-  return audio;
+  const answer = synthesize(text, { ...options, voice }).finally(() => underWay.delete(key));
+  underWay.set(key, answer);
+  return answer;
 }
