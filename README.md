@@ -84,6 +84,7 @@ src/lib/
   dictionary.ts       word lookups: Free Dictionary, then Wiktionary
   ai-meaning.ts       a word's meaning in its sentence, from an AI model on OpenRouter
   pronunciation.ts    a word read aloud by a Gemini voice, made once and saved
+  speakable.ts        which text the voice will read (pure)
   voices.ts           the device's most natural English voice, for when there is none (pure)
   db/                 Mongoose connection and models
 src/app/

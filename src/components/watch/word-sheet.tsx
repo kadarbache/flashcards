@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { addWordToDeck, defineWord, removeWordFromDeck } from "@/app/watch/actions";
 import { play } from "@/components/game/sound";
-import { CheckIcon, CloseIcon, MinusIcon, PlusIcon, SpeakIcon } from "@/components/icons";
+import { CheckIcon, CloseIcon, MinusIcon, PlusIcon } from "@/components/icons";
 import { Sheet } from "@/components/sheet";
+import { SpeakerButton } from "@/components/speaker";
 import { field, iconButton, label, primaryButton } from "@/components/ui";
 import type { DictionaryEntry, LookupOutcome } from "@/lib/dictionary";
 import { findSavedCards, type SavedCard } from "@/lib/transcript";
-import { pickVoice } from "@/lib/voices";
 
 export interface DeckOption {
   id: string;
@@ -70,43 +70,6 @@ function lookUp(word: string, sentence: string): Promise<LookupOutcome> {
   const forget = () => answers.delete(key);
   asked.then((outcome) => !outcome.ok && outcome.reason === "failed" && forget(), forget);
   return asked;
-}
-
-function canSpeak(): boolean {
-  return typeof window !== "undefined" && "speechSynthesis" in window;
-}
-
-/** The device's voices. Chrome fills the list only after it is first asked for, so the sheet asks early. */
-function deviceVoices(): SpeechSynthesisVoice[] {
-  return canSpeak() ? window.speechSynthesis.getVoices() : [];
-}
-
-/** Failures worth a second try on a voice stored on the device; not a cancel or a newer word cutting in. */
-const VOICE_FAILURES = new Set(["network", "synthesis-unavailable", "synthesis-failed", "voice-unavailable"]);
-
-/** Say a word with the most natural voice the device has, rather than its default. */
-function sayAloud(text: string) {
-  if (!canSpeak()) return;
-  const say = (voice: SpeechSynthesisVoice | null, retry: boolean) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = voice?.lang ?? "en-US";
-    if (voice) utterance.voice = voice;
-    // Online voices need a connection. Without one, say it again offline.
-    if (retry && voice && !voice.localService) {
-      utterance.onerror = (event) => {
-        if (VOICE_FAILURES.has(event.error)) say(pickVoice(deviceVoices(), { localOnly: true }), false);
-      };
-    }
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  };
-  say(pickVoice(deviceVoices()), true);
-}
-
-/** The dictionary's recording when there is one, the device's best voice otherwise. */
-function pronounce(entry: DictionaryEntry) {
-  if (entry.audio) void new Audio(entry.audio).play().catch(() => sayAloud(entry.word));
-  else sayAloud(entry.word);
 }
 
 /** A definition as the back of a card: "(verb) to move fast on foot", the label style the app already reads. */
@@ -184,57 +147,6 @@ function SheetBody({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-
-  const [voiceLoading, setVoiceLoading] = useState(false);
-  const clip = useRef<HTMLAudioElement | null>(null);
-
-  // Start the voice list loading now, so the best voice is known by the time the speaker is tapped.
-  // A clip still loading when the sheet closes is stopped, so it does not speak over the video.
-  useEffect(() => {
-    deviceVoices();
-    return () => {
-      clip.current?.pause();
-      clip.current = null;
-    };
-  }, []);
-
-  /**
-   * The AI voice's clip for the word, made on the first tap (a few seconds)
-   * and saved, so every later tap plays at once. When there is no clip --
-   * no key, the free allowance used up, Google down -- the device speaks.
-   * The clip is started inside the tap itself, which phones insist on.
-   */
-  function hear(entry: DictionaryEntry) {
-    if (!aiVoice) {
-      pronounce(entry);
-      return;
-    }
-    clip.current?.pause();
-    const audio = new Audio(`/api/speech?text=${encodeURIComponent(entry.word)}`);
-    clip.current = audio;
-
-    let settled = false;
-    const settle = (played: boolean) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      // A newer tap, or a closed sheet, owns the speaker now.
-      if (clip.current !== audio) return;
-      setVoiceLoading(false);
-      if (!played) {
-        clip.current = null;
-        pronounce(entry);
-      }
-    };
-    const timer = window.setTimeout(() => {
-      audio.pause();
-      settle(false);
-    }, 10_000);
-    audio.addEventListener("playing", () => settle(true), { once: true });
-    audio.addEventListener("error", () => settle(false), { once: true });
-    setVoiceLoading(true);
-    audio.play().catch(() => settle(false));
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -324,17 +236,13 @@ function SheetBody({
           <h2 className="text-3xl font-extrabold tracking-tight break-words">{entry?.word ?? pick.word}</h2>
           {entry?.phonetic && <p className="text-ink-muted">{entry.phonetic}</p>}
         </div>
-        {entry && (aiVoice || entry.audio || canSpeak()) && (
-          <button
-            type="button"
-            className={iconButton}
-            aria-label={`Hear “${entry.word}”`}
-            aria-busy={voiceLoading}
-            disabled={voiceLoading}
-            onClick={() => hear(entry)}
-          >
-            <SpeakIcon className={`h-5 w-5 ${voiceLoading ? "animate-pulse text-gold" : ""}`} />
-          </button>
+        {entry && (
+          <SpeakerButton
+            text={entry.word}
+            aiVoice={aiVoice}
+            recording={entry.audio}
+            className={`${iconButton} aria-busy:text-gold`}
+          />
         )}
         <button type="button" className={iconButton} aria-label="Close" onClick={onClose}>
           <CloseIcon className="h-5 w-5" />

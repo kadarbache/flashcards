@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
-import { pronunciationOf, speakableText } from "@/lib/pronunciation";
+import { pronunciationOf } from "@/lib/pronunciation";
+import { speakableText } from "@/lib/speakable";
 
 /**
  * GET /api/speech?text=essence

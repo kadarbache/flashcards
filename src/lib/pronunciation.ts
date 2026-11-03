@@ -31,25 +31,17 @@ const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
  * the next tap on that word plays it.
  */
 const TIMEOUT_MS = 20_000;
-const MAX_TEXT = 60;
+
+/** Whether the AI voice is set up. Pages pass this to the speaker buttons. */
+export function aiVoiceReady(): boolean {
+  return Boolean(process.env.GEMINI_API_KEY);
+}
 
 export interface VoiceOptions {
   apiKey: string;
   model?: string | null;
   voice?: string | null;
   fetchImpl?: FetchLike;
-}
-
-/**
- * What may be read aloud: a word or short phrase, as a flashcard would show
- * it. Anything else is refused, so the voice cannot be borrowed to read out
- * arbitrary text.
- */
-export function speakableText(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const text = raw.normalize("NFC").replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
-  if (text === "" || text.length > MAX_TEXT) return null;
-  return /^\p{L}[\p{L}\p{M}' .-]*$/u.test(text) ? text : null;
 }
 
 // --- WAV ---------------------------------------------------------------------

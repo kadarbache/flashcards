@@ -7,6 +7,7 @@ import { ArrowIcon, VideoIcon } from "@/components/icons";
 import { field, iconButton, panel, primaryButton } from "@/components/ui";
 import { WatchSession } from "@/components/watch/watch-session";
 import { listDecks } from "@/lib/decks";
+import { aiVoiceReady } from "@/lib/pronunciation";
 import { parseStartTime, parseVideoId } from "@/lib/transcript";
 import type { SavedCard } from "@/lib/transcript";
 import {
@@ -79,7 +80,7 @@ export default async function WatchPage({ searchParams }: PageProps<"/watch">) {
       outcome={outcome}
       decks={decks}
       savedCards={savedCards}
-      aiVoice={Boolean(process.env.GEMINI_API_KEY)}
+      aiVoice={aiVoiceReady()}
       backupConfigured={Boolean(process.env.SUPADATA_API_KEY)}
     />
   );
