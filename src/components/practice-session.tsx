@@ -13,6 +13,7 @@ import {
   type SwipeFrame,
 } from "@/components/game/use-swipe";
 import { ArrowIcon, BoltIcon, FlipIcon, PlayIcon, ShuffleIcon } from "@/components/icons";
+import { cardSpeaker, SpeakerButton } from "@/components/speaker";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
 import { MIN_BLITZ_CARDS, splitLabel } from "@/lib/blitz";
 import type { PracticeCard } from "@/lib/decks";
@@ -45,10 +46,13 @@ export function PracticeSession({
   deckId,
   deckName,
   cards,
+  aiVoice,
 }: {
   deckId: string;
   deckName: string;
   cards: PracticeCard[];
+  /** Read words aloud with the AI voice, falling back to the device's. */
+  aiVoice: boolean;
 }) {
   const [order, setOrder] = useState(cards);
   /** Where the run has got to. Equal to `order.length` once it is over. */
@@ -260,6 +264,7 @@ export function PracticeSession({
             leaving={leaving}
             enter={cameFrom === "back" ? "anim-slide-in-left" : "anim-card-in"}
             canGoBack={index > 0}
+            aiVoice={aiVoice}
             onFrame={(frame) => {
               paint(frame.direction, frame.progress);
               armSound(frame);
@@ -320,6 +325,7 @@ function SwipeCard({
   canGoBack,
   onFrame,
   onSwipe,
+  aiVoice,
 }: {
   card: PracticeCard;
   hue: string;
@@ -330,6 +336,7 @@ function SwipeCard({
   canGoBack: boolean;
   onFrame: (frame: SwipeFrame) => void;
   onSwipe: (direction: Direction) => void;
+  aiVoice: boolean;
 }) {
   const element = useRef<HTMLDivElement>(null);
   const swipe = useSwipe(element, {
@@ -376,7 +383,9 @@ function SwipeCard({
             flipped ? "[transform:rotateY(180deg)]" : ""
           }`}
         >
+          {/* The side facing away is inert, so its buttons cannot be reached. */}
           <div
+            inert={flipped}
             className="absolute inset-0 flex flex-col rounded-[28px] p-6 text-paper-ink shadow-[0_28px_60px_-24px_rgba(0,0,0,.75)] [backface-visibility:hidden]"
             style={{ background: hue }}
           >
@@ -399,6 +408,7 @@ function SwipeCard({
           </div>
 
           <div
+            inert={!flipped}
             className="absolute inset-0 flex flex-col rounded-[28px] border-[6px] bg-paper p-5 text-paper-ink shadow-[0_28px_60px_-24px_rgba(0,0,0,.75)] [backface-visibility:hidden] [transform:rotateY(180deg)]"
             style={{ borderColor: hue }}
           >
@@ -406,7 +416,10 @@ function SwipeCard({
               Answer
             </span>
             <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-2 py-4 text-center">
-              <p className="text-base font-bold break-words text-paper-muted">{card.front}</p>
+              <div className="flex max-w-full items-center justify-center gap-2">
+                <p className="min-w-0 text-base font-bold break-words text-paper-muted">{card.front}</p>
+                <SpeakerButton text={card.front} aiVoice={aiVoice} className={cardSpeaker} />
+              </div>
               {back.label && (
                 <span className="rounded-full bg-[#efeafe] px-2.5 py-0.5 text-xs font-extrabold text-[#5b4bb0]">
                   {back.label}

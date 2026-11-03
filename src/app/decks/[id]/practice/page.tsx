@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PracticeSession } from "@/components/practice-session";
 import { SetupNotice } from "@/components/setup-notice";
 import { isFrameworkControlFlow } from "@/lib/next-errors";
+import { aiVoiceReady } from "@/lib/pronunciation";
 import {
   getDeck,
   listPracticeCards,
@@ -30,6 +31,7 @@ export default async function PracticePage({
       deckId={data.deck.id}
       deckName={data.deck.name}
       cards={data.cards}
+      aiVoice={aiVoiceReady()}
     />
   );
 }

@@ -5,6 +5,7 @@ import { SetupNotice } from "@/components/setup-notice";
 import { MIN_BLITZ_CARDS } from "@/lib/blitz";
 import { getDeck, getNextCard, type DeckSettings, type NextCardResult } from "@/lib/decks";
 import { isFrameworkControlFlow } from "@/lib/next-errors";
+import { aiVoiceReady } from "@/lib/pronunciation";
 import { requestTimeZone } from "@/lib/request-time-zone";
 import { getPlayerStats, type PlayerStats } from "@/lib/stats";
 
@@ -33,6 +34,7 @@ export default async function ReviewPage({ params }: PageProps<"/decks/[id]/revi
       initial={data.queue}
       initialPlayer={data.player}
       canBlitz={cardCount >= MIN_BLITZ_CARDS}
+      aiVoice={aiVoiceReady()}
     />
   );
 }

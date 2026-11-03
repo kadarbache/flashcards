@@ -1,5 +1,6 @@
 import { SetupNotice } from "@/components/setup-notice";
 import { WordOfTheDaySession } from "@/components/word-of-the-day";
+import { aiVoiceReady } from "@/lib/pronunciation";
 import { requestTimeZone } from "@/lib/request-time-zone";
 import { getWordOfTheDay, type WordOfTheDay } from "@/lib/word-of-the-day-db";
 
@@ -23,5 +24,5 @@ export default async function WordOfTheDayPage() {
     timeZone,
   }).format(new Date());
 
-  return <WordOfTheDaySession data={data} dateLabel={dateLabel} />;
+  return <WordOfTheDaySession data={data} dateLabel={dateLabel} aiVoice={aiVoiceReady()} />;
 }

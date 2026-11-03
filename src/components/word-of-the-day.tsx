@@ -16,6 +16,7 @@ import {
   HomeIcon,
   SunIcon,
 } from "@/components/icons";
+import { cardSpeaker, SpeakerButton } from "@/components/speaker";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
 import { optionText, splitLabel } from "@/lib/blitz";
 import type { WordRecord, WordResult } from "@/lib/word-of-the-day";
@@ -36,7 +37,16 @@ const STAMPS: { direction: Direction; result: WordResult; label: string; color: 
  *
  * Nothing here touches a card's schedule.
  */
-export function WordOfTheDaySession({ data, dateLabel }: { data: WordOfTheDay; dateLabel: string }) {
+export function WordOfTheDaySession({
+  data,
+  dateLabel,
+  aiVoice,
+}: {
+  data: WordOfTheDay;
+  dateLabel: string;
+  /** Read the word aloud with the AI voice, falling back to the device's. */
+  aiVoice: boolean;
+}) {
   const word = data.today;
   const [result, setResult] = useState<WordResult | null>(word?.result ?? null);
   const [flipped, setFlipped] = useState(word?.result != null);
@@ -138,6 +148,7 @@ export function WordOfTheDaySession({ data, dateLabel }: { data: WordOfTheDay; d
             result={result}
             onFlip={flip}
             onAnswer={(choice) => void answer(choice)}
+            aiVoice={aiVoice}
           />
 
           {!result && !flipped && (
@@ -210,12 +221,14 @@ function WordCard({
   result,
   onFlip,
   onAnswer,
+  aiVoice,
 }: {
   word: DailyWordView;
   flipped: boolean;
   result: WordResult | null;
   onFlip: () => void;
   onAnswer: (result: WordResult) => void;
+  aiVoice: boolean;
 }) {
   const element = useRef<HTMLDivElement>(null);
   const stamps = useRef<Partial<Record<Direction, HTMLDivElement | null>>>({});
@@ -270,7 +283,7 @@ function WordCard({
               flipped ? "[transform:rotateY(180deg)]" : ""
             }`}
           >
-            <Face>
+            <Face hidden={flipped}>
               <CardTop deckName={word.deckName} />
               <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-2 py-4 text-center">
                 <p className="text-sm font-extrabold tracking-wide text-paper-muted uppercase">
@@ -286,10 +299,13 @@ function WordCard({
               </p>
             </Face>
 
-            <Face back ring={ring}>
+            <Face back hidden={!flipped} ring={ring}>
               <CardTop deckName={word.deckName} />
               <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-2 py-4 text-center">
-                <p className="text-lg font-extrabold break-words">{word.front}</p>
+                <div className="flex max-w-full items-center justify-center gap-2">
+                  <p className="min-w-0 text-lg font-extrabold break-words">{word.front}</p>
+                  <SpeakerButton text={word.front} aiVoice={aiVoice} className={cardSpeaker} />
+                </div>
                 <span className="h-1 w-10 rounded-full bg-[#e4dcfd]" aria-hidden="true" />
                 {back.label && (
                   <span className="rounded-full bg-[#efeafe] px-2.5 py-0.5 text-xs font-extrabold text-[#5b4bb0]">
@@ -333,17 +349,21 @@ function WordCard({
   );
 }
 
+/** One side of the card. The side facing away is `hidden`: inert, so its buttons cannot be reached. */
 function Face({
   back = false,
+  hidden = false,
   ring = "",
   children,
 }: {
   back?: boolean;
+  hidden?: boolean;
   ring?: string;
   children: React.ReactNode;
 }) {
   return (
     <div
+      inert={hidden}
       className={`absolute inset-0 flex flex-col rounded-[28px] bg-paper p-5 text-paper-ink shadow-[0_28px_60px_-24px_rgba(0,0,0,.75)] [backface-visibility:hidden] sm:p-6 ${ring} ${
         back ? "[transform:rotateY(180deg)]" : ""
       }`}

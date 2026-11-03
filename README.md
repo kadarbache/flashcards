@@ -99,7 +99,7 @@ src/app/
   collection/         the album: every word with its medal
   watch/              a YouTube video with its transcript; tap words to keep them
   api/cron/reminders/ the evening reminder job, called by Vercel Cron
-  api/speech/         a word's spoken clip, for the Watch screen's speaker button
+  api/speech/         a word's spoken clip, for the speaker on cards and the word sheet
   manifest.ts, icons/ what makes the app installable
 ```
 
@@ -278,14 +278,17 @@ the app skips it for five minutes rather than waiting on its timeout with
 every click.
 
 **Pronunciation** comes from one of Google's Gemini voices when
-`GEMINI_API_KEY` is set (a free key from aistudio.google.com/apikey). The first
-tap on a word's speaker asks Google, which takes two to four seconds; the clip
-is trimmed of its silence and saved in the database, so every later tap plays
-it at once, on any device. `GEMINI_VOICE` picks the voice (Kore unless set;
-any of Google's 30 prebuilt voices) and `GEMINI_VOICE_MODEL` the model
-(`gemini-3.8-flash-lite-tts` unless set). The free tier allows three new words
-a minute per model, so when the first is used up `gemini-3.8-flash-tts` is
-asked. Without a key, or when Google is out of allowance, slow or down, the
+`GEMINI_API_KEY` is set (a free key from aistudio.google.com/apikey). The
+speaker sits in the word sheet and on the answer side of every flashcard
+(review, practice, Word of the Day). The first tap on a new word asks Google,
+which takes two to four seconds; the clip is trimmed of its silence and saved
+in the database, so it is made once for good, for every device. The app keeps
+each clip it has played in memory, so tapping again replays it without asking
+the server until the page is closed. `GEMINI_VOICE` picks the voice (Kore
+unless set; any of Google's 30 prebuilt voices) and `GEMINI_VOICE_MODEL` the
+model (`gemini-3.8-flash-lite-tts` unless set). The free tier allows three new
+words a minute per model, so when the first is used up `gemini-3.8-flash-tts`
+is asked. Without a key, or when Google is out of allowance, slow or down, the
 device speaks instead, with the most natural English voice it has: Edge's
 "Natural" voices, Chrome's Google voice, Apple's Premium downloads.
 

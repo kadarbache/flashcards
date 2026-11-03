@@ -59,12 +59,15 @@ export function ReviewSession({
   initial,
   initialPlayer,
   canBlitz,
+  aiVoice,
 }: {
   deckId: string;
   deckName: string;
   initial: NextCardResult;
   initialPlayer: PlayerStats;
   canBlitz: boolean;
+  /** Read words aloud with the AI voice, falling back to the device's. */
+  aiVoice: boolean;
 }) {
   const [queue, setQueue] = useState(initial);
   const [player, setPlayer] = useState(initialPlayer);
@@ -437,6 +440,7 @@ export function ReviewSession({
                 deckId={deckId}
                 deckName={deckName}
                 onDelete={removeCard}
+                aiVoice={aiVoice}
               />
 
               <Floats items={floats} />
