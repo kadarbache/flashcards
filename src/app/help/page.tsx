@@ -186,12 +186,12 @@ export default function HelpPage() {
           <p className="flex gap-2 text-ink-muted">
             <SnowflakeIcon className="mt-1 h-4 w-4 shrink-0 text-ice" />
             <span>
-              A streak freeze covers a day you miss. Buy one on the home screen for{" "}
-              {FREEZE_COST.toLocaleString("en-US")} XP and hold up to {MAX_FREEZES}. It is used by
-              itself when a day ends without your goal, and only when it saves the streak. A frozen
-              day keeps the streak going without adding to it, and a freeze never covers a day
-              missed before you bought it. Your level stays where it is: it counts all the XP you
-              ever earned.
+              A streak freeze covers a day you miss. When a streak breaks, the home screen offers
+              one for {FREEZE_COST.toLocaleString("en-US")} XP, and you can hold up to{" "}
+              {MAX_FREEZES}. It is used by itself when a day ends without your goal, and only when
+              it saves the streak. A frozen day keeps the streak going without adding to it, and a
+              freeze never covers a day missed before you bought it. Your level stays where it is:
+              it counts all the XP you ever earned.
             </span>
           </p>
         </section>

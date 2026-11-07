@@ -78,6 +78,9 @@ export default async function Home() {
 
   const left = Math.max(0, player.goal - player.today);
   const frozenThisWeek = player.week.some((day) => day.frozen);
+  // The freeze shop stays out of the way until a streak is lost: back at zero
+  // after having had one.
+  const streakBroken = player.streak === 0 && player.bestStreak > 0;
   const headline = player.todayDone
     ? "Goal done. Nice work."
     : player.streak > 0
@@ -151,7 +154,14 @@ export default async function Home() {
               A streak freeze saved your streak on {formatDay(player.lastFrozenDay, "long")}.
             </p>
           )}
-          <FreezeShop held={player.freezes} xpToSpend={player.xpToSpend} />
+          {streakBroken && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-[#f2c9a8]">
+                Your streak broke. A freeze covers the next day you miss.
+              </p>
+              <FreezeShop held={player.freezes} xpToSpend={player.xpToSpend} />
+            </div>
+          )}
           <p className="text-xs text-[#d9b394]">Best streak: {player.bestStreak} days</p>
         </section>
 

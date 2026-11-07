@@ -194,15 +194,15 @@ when a card comes back.
   to start, set with - and + on the home screen). Days in a row make the
   streak. Days follow the browser's time zone, which the app keeps in a `tz`
   cookie, so midnight is your midnight and not the server's.
-- **Streak freezes.** Bought on the home screen for 2,000 XP, up to 2 held at
-  once. When a day ends without the goal, a held freeze covers it: the streak
-  goes on, and the frozen day does not add to it. Freezes are spent only when
-  they can cover every missed day since the streak was last kept, and a
-  freeze never covers a day missed before it was bought, so it cannot repair
-  a streak after the fact. They are spent the first time the app reads the
-  streak after the day ends (opening the app, or the evening reminder). XP
-  spent on freezes comes off the XP shown at the top of the home screen, not
-  off the level, which counts all the XP ever earned.
+- **Streak freezes.** Offered on the home screen only after a streak breaks,
+  for 2,000 XP, up to 2 held at once. When a day ends without the goal, a
+  held freeze covers it: the streak goes on, and the frozen day does not add
+  to it. Freezes are spent only when they can cover every missed day since
+  the streak was last kept, and a freeze never covers a day missed before it
+  was bought, so it cannot repair a streak after the fact. They are spent the
+  first time the app reads the streak after the day ends (opening the app, or
+  the evening reminder). XP spent on freezes comes off the XP shown at the top
+  of the home screen, not off the level, which counts all the XP ever earned.
 
 ## Blitz
 
