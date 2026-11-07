@@ -40,6 +40,9 @@
 
   --color-gold: #ffd24a;
   --color-flame: #ff8a3d;
+  /* Streak freezes. */
+  --color-ice: #8fd8ff;
+  --color-ice-ink: #0b2235;
 
   /* One colour per grade, for the dark ground. */
   --color-again: #ff6b81;

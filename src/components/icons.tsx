@@ -289,6 +289,16 @@ export function LogoMark({ className }: IconProps) {
   );
 }
 
+/** A streak freeze: a snowflake. */
+export function SnowflakeIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M12 2.5v19M3.8 7.25l16.4 9.5M3.8 16.75l16.4-9.5" />
+      <path d="M9.9 4.4 12 6.5l2.1-2.1M9.9 19.6l2.1-2.1 2.1 2.1M17.5 6.4l-.7 2.85 2.85.77M6.5 6.4l.7 2.85-2.85.77M19.6 14l-2.85.77.77 2.85M4.4 14l2.85.77-.77 2.85" />
+    </Line>
+  );
+}
+
 /** Word of the Day: a sun, for one new word each morning. */
 export function SunIcon({ className }: IconProps) {
   return (

@@ -28,6 +28,7 @@ import {
 } from "@/lib/reminders-db";
 
 const base = {
+  freezes: 0,
   streak: 0,
   today: 0,
   goal: 20,
@@ -43,6 +44,12 @@ describe("reminderMessage", () => {
     assert.equal(message?.title, "Your 12-day streak ends in 3 hours");
     assert.equal(message?.body, "12 more cards keeps it alive.");
     assert.equal(message?.url, "/");
+  });
+
+  it("says a held streak freeze has today covered", () => {
+    const message = reminderMessage({ ...base, streak: 12, today: 8, freezes: 1 }, 3);
+    assert.equal(message?.title, "Your 12-day streak needs 12 more cards");
+    assert.equal(message?.body, "If today gets away, a streak freeze covers it.");
   });
 
   it("invites a fresh start without a streak, and mentions the word", () => {

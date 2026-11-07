@@ -27,6 +27,7 @@ import {
 import { answerCard, undoLastAnswer } from "@/lib/review";
 import type { Grade } from "@/lib/srs/types";
 import { getPlayerStats, setDailyGoal, type SessionResult } from "@/lib/stats";
+import { buyFreeze, type BuyOutcome } from "@/lib/streak-freeze-db";
 import type { WordResult } from "@/lib/word-of-the-day";
 import { answerWordOfTheDay, type AnswerOutcome } from "@/lib/word-of-the-day-db";
 
@@ -338,6 +339,18 @@ export async function answerDailyWord(day: string, result: WordResult): Promise<
     revalidatePath("/");
     revalidatePath("/word");
   }
+  return outcome;
+}
+
+/** Buy a streak freeze with XP. */
+export async function buyStreakFreeze(): Promise<BuyOutcome> {
+  await requireSession();
+  const timeZone = await requestTimeZone();
+  // Reading the stats first also spends any freeze a missed day needs, which
+  // can free a slot.
+  const player = await getPlayerStats(timeZone);
+  const outcome = await buyFreeze(player.xp, timeZone);
+  if (outcome.ok) revalidatePath("/");
   return outcome;
 }
 

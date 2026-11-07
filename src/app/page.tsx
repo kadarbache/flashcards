@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DeckForm } from "@/components/deck-form";
+import { FreezeShop } from "@/components/freeze-shop";
 import { GoalRing, LevelBar } from "@/components/game/hud";
 import { GoalStepper } from "@/components/goal-stepper";
 import {
@@ -14,6 +15,7 @@ import {
   HelpIcon,
   MedalIcon,
   PlayIcon,
+  SnowflakeIcon,
   StarIcon,
   SunIcon,
   SwapIcon,
@@ -75,6 +77,7 @@ export default async function Home() {
   }).format(new Date());
 
   const left = Math.max(0, player.goal - player.today);
+  const frozenThisWeek = player.week.some((day) => day.frozen);
   const headline = player.todayDone
     ? "Goal done. Nice work."
     : player.streak > 0
@@ -88,9 +91,12 @@ export default async function Home() {
           <p className="text-sm font-semibold text-ink-muted">{dateLabel}</p>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">{headline}</h1>
         </div>
-        <span className="flex items-center gap-2 rounded-full bg-surface-raised px-4 py-2 text-sm font-extrabold text-gold tabular-nums">
+        <span
+          className="flex items-center gap-2 rounded-full bg-surface-raised px-4 py-2 text-sm font-extrabold text-gold tabular-nums"
+          title={`XP to spend. ${player.xp.toLocaleString("en-US")} earned in all.`}
+        >
           <StarIcon className="h-4 w-4" />
-          {player.xp.toLocaleString("en-US")} XP
+          {player.xpToSpend.toLocaleString("en-US")} XP
         </span>
       </div>
 
@@ -121,17 +127,31 @@ export default async function Home() {
                   className={`flex h-9 w-9 items-center justify-center rounded-full ${
                     day.met
                       ? "bg-flame text-[#2a1a12]"
-                      : day.isToday
-                        ? "border-[3px] border-dashed border-flame"
-                        : "bg-[#3d2618]"
+                      : day.frozen
+                        ? "bg-ice text-ice-ink"
+                        : day.isToday
+                          ? "border-[3px] border-dashed border-flame"
+                          : "bg-[#3d2618]"
                   }`}
-                  title={`${day.count} ${day.count === 1 ? "card" : "cards"}`}
+                  title={
+                    day.frozen
+                      ? "A streak freeze covered this day"
+                      : `${day.count} ${day.count === 1 ? "card" : "cards"}`
+                  }
                 >
                   {day.met && <CheckIcon className="h-4 w-4" />}
+                  {day.frozen && <SnowflakeIcon className="h-4 w-4" />}
                 </span>
               </li>
             ))}
           </ol>
+          {frozenThisWeek && player.lastFrozenDay && (
+            <p className="flex items-center gap-2 text-sm font-bold text-ice">
+              <SnowflakeIcon className="h-4 w-4 shrink-0" />
+              A streak freeze saved your streak on {formatDay(player.lastFrozenDay, "long")}.
+            </p>
+          )}
+          <FreezeShop held={player.freezes} xpToSpend={player.xpToSpend} />
           <p className="text-xs text-[#d9b394]">Best streak: {player.bestStreak} days</p>
         </section>
 

@@ -12,6 +12,7 @@ import {
   FlipIcon,
   HeartIcon,
   MedalIcon,
+  SnowflakeIcon,
   SoundIcon,
   StarIcon,
   SunIcon,
@@ -20,6 +21,7 @@ import {
 import { panel, primaryButton } from "@/components/ui";
 import { BOSS_DAYS, BOSS_HEARTS, BOSS_MIN_LAPSES, BOSS_XP } from "@/lib/boss";
 import { COMBO_PAUSE_MS, DEFAULT_DAILY_GOAL, XP_PER_ANSWER } from "@/lib/game";
+import { FREEZE_COST, MAX_FREEZES } from "@/lib/streak-freeze";
 
 export const metadata: Metadata = { title: "How to play · Flashcards" };
 
@@ -180,6 +182,17 @@ export default function HelpPage() {
           <p className="text-ink-muted">
             Answer your daily goal ({DEFAULT_DAILY_GOAL} cards to start) and today counts. Days in a
             row make your streak. Change the goal on the home screen with − and +.
+          </p>
+          <p className="flex gap-2 text-ink-muted">
+            <SnowflakeIcon className="mt-1 h-4 w-4 shrink-0 text-ice" />
+            <span>
+              A streak freeze covers a day you miss. Buy one on the home screen for{" "}
+              {FREEZE_COST.toLocaleString("en-US")} XP and hold up to {MAX_FREEZES}. It is used by
+              itself when a day ends without your goal, and only when it saves the streak. A frozen
+              day keeps the streak going without adding to it, and a freeze never covers a day
+              missed before you bought it. Your level stays where it is: it counts all the XP you
+              ever earned.
+            </span>
           </p>
         </section>
         <section className={`${panel} space-y-3`}>

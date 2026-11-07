@@ -14,10 +14,18 @@ import {
   XP_PER_ANSWER,
   type WeekDay,
 } from "@/lib/game";
+import { readFreezes, settleFreezes } from "@/lib/streak-freeze-db";
 
 /** Everything the HUD and the home screen show about the player. */
 export interface PlayerStats {
+  /** All the XP ever earned. It sets the level, so spending XP never lowers it. */
   xp: number;
+  /** XP left to spend: everything earned, less what streak freezes cost. */
+  xpToSpend: number;
+  /** Streak freezes waiting for a missed day. */
+  freezes: number;
+  /** The latest missed day a freeze covered, or null. */
+  lastFrozenDay: string | null;
   level: number;
   /** XP inside the current level, and what the level takes in total. */
   levelInto: number;
@@ -67,6 +75,9 @@ export async function setDailyGoal(goal: number): Promise<number> {
  * earned, plus each beaten boss, so an undo -- which deletes the answer --
  * takes its XP back without any bookkeeping. Days are cut on the player's
  * calendar, not the server's.
+ *
+ * Reading the streak is also when held streak freezes get spent on days that
+ * ended without the goal (see `settleFreezes`).
  */
 export async function getPlayerStats(
   timeZoneRaw: string,
@@ -75,7 +86,7 @@ export async function getPlayerStats(
   const timeZone = safeTimeZone(timeZoneRaw);
   await connectToDatabase();
 
-  const [xpRows, beatenXp, dayRows, goal] = await Promise.all([
+  const [xpRows, beatenXp, dayRows, goal, bought] = await Promise.all([
     ReviewLog.aggregate<{ xp: number }>([
       { $group: { _id: null, xp: { $sum: { $ifNull: ["$xp", XP_PER_ANSWER] } } } },
     ]),
@@ -90,16 +101,22 @@ export async function getPlayerStats(
       },
     ]),
     getDailyGoal(),
+    readFreezes(),
   ]);
 
   const xp = (xpRows[0]?.xp ?? 0) + beatenXp;
   const counts = new Map(dayRows.map((row) => [row._id, row.count]));
   const today = dayKey(now, timeZone);
-  const streak = streakFrom(counts, today, goal);
+  const freezes = await settleFreezes(bought, counts, goal, today);
+  const streak = streakFrom(counts, today, goal, freezes.frozen);
   const level = levelFromXp(xp);
 
   return {
     xp,
+    // An undo after buying a freeze can take back XP already spent.
+    xpToSpend: Math.max(0, xp - freezes.spent),
+    freezes: freezes.held.length,
+    lastFrozenDay: [...freezes.frozen].sort().at(-1) ?? null,
     level: level.level,
     levelInto: level.into,
     levelNeeded: level.needed,
@@ -109,6 +126,6 @@ export async function getPlayerStats(
     streak: streak.current,
     bestStreak: streak.best,
     todayDone: streak.todayDone,
-    week: lastSevenDays(counts, today, goal),
+    week: lastSevenDays(counts, today, goal, freezes.frozen),
   };
 }

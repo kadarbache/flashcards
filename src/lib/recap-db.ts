@@ -12,6 +12,7 @@ import {
 } from "@/lib/game";
 import { summarizeWeek, type Recap, type RecapAnswer } from "@/lib/recap";
 import { getDailyGoal } from "@/lib/stats";
+import { readFreezes } from "@/lib/streak-freeze-db";
 import { isDayKey, isWordResult } from "@/lib/word-of-the-day";
 
 export interface RecapPage {
@@ -67,7 +68,7 @@ export async function getRecap(
   };
 
   await connectToDatabase();
-  const [logs, cards, videos, words, bosses, decks, goal, dayRows, first] = await Promise.all([
+  const [logs, cards, videos, words, bosses, decks, goal, dayRows, first, freezes] = await Promise.all([
     ReviewLog.find({ reviewedAt: { $gte: from, $lt: to } })
       .select({ cardId: 1, deckId: 1, grade: 1, before: 1, intervalDaysAfter: 1, reviewedAt: 1, elapsedMs: 1, xp: 1 })
       .lean(),
@@ -87,6 +88,7 @@ export async function getRecap(
       },
     ]),
     ReviewLog.findOne().sort({ reviewedAt: 1 }).select({ reviewedAt: 1 }).lean(),
+    readFreezes(),
   ]);
 
   // A week still going is held against the week before up to this same
@@ -124,7 +126,9 @@ export async function getRecap(
 
   const counts = new Map(dayRows.map((row) => [row._id, row.count]));
   const streak =
-    sunday >= today ? streakFrom(counts, today, goal).current : runEndingOn(counts, sunday, goal);
+    sunday >= today
+      ? streakFrom(counts, today, goal, freezes.frozen).current
+      : runEndingOn(counts, sunday, goal, freezes.frozen);
 
   const recap = summarizeWeek({
     monday,
@@ -150,9 +154,20 @@ export async function getRecap(
   };
 }
 
-/** Days in a row the goal was met, ending on `day` itself. */
-function runEndingOn(counts: ReadonlyMap<string, number>, day: string, goal: number): number {
+/**
+ * Days in a row the goal was met, ending on `day` itself. A day a streak
+ * freeze covered keeps the run going without adding to it.
+ */
+function runEndingOn(
+  counts: ReadonlyMap<string, number>,
+  day: string,
+  goal: number,
+  frozen: ReadonlySet<string>,
+): number {
+  const met = (at: string) => (counts.get(at) ?? 0) >= goal;
   let run = 0;
-  for (let at = day; (counts.get(at) ?? 0) >= goal; at = previousDay(at)) run += 1;
+  for (let at = day; met(at) || frozen.has(at); at = previousDay(at)) {
+    if (met(at)) run += 1;
+  }
   return run;
 }

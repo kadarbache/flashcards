@@ -54,6 +54,28 @@ const profileSchema = new Schema(
   { timestamps: true },
 );
 
+/**
+ * A streak freeze, bought with XP. It waits until a day ends without the goal,
+ * then covers that day so the streak survives it.
+ */
+const streakFreezeSchema = new Schema(
+  {
+    /** The day it was bought, YYYY-MM-DD on the player's calendar. It covers that day or a later one. */
+    boughtDay: { type: String, required: true },
+    /** The XP it cost, kept per freeze so a later price change leaves past ones alone. */
+    cost: { type: Number, required: true, min: 0 },
+    /** The missed day it covered, or null while it is still held. */
+    usedOn: { type: String, default: null },
+  },
+  { timestamps: true },
+);
+
+// One freeze per missed day, even when two requests spend freezes at once.
+streakFreezeSchema.index(
+  { usedOn: 1 },
+  { unique: true, partialFilterExpression: { usedOn: { $type: "string" } } },
+);
+
 const cardSchema = new Schema(
   {
     deckId: { type: Schema.Types.ObjectId, ref: "Deck", required: true, index: true },
@@ -239,6 +261,7 @@ export type DailyWordDocument = InferSchemaType<typeof dailyWordSchema>;
 export type BossDocument = InferSchemaType<typeof bossSchema>;
 export type PushDeviceDocument = InferSchemaType<typeof pushDeviceSchema>;
 export type ProfileDocument = InferSchemaType<typeof profileSchema>;
+export type StreakFreezeDocument = InferSchemaType<typeof streakFreezeSchema>;
 export type CardDocument = InferSchemaType<typeof cardSchema>;
 export type ReviewLogDocument = InferSchemaType<typeof reviewLogSchema>;
 
@@ -275,6 +298,10 @@ export const ReviewLog: Model<ReviewLogDocument> =
 dropStaleModel("Profile");
 export const Profile: Model<ProfileDocument> =
   (models.Profile as Model<ProfileDocument>) || model("Profile", profileSchema);
+
+dropStaleModel("StreakFreeze");
+export const StreakFreeze: Model<StreakFreezeDocument> =
+  (models.StreakFreeze as Model<StreakFreezeDocument>) || model("StreakFreeze", streakFreezeSchema);
 
 dropStaleModel("DailyWord");
 export const DailyWord: Model<DailyWordDocument> =

@@ -21,6 +21,8 @@ export const REMINDER_UTC_HOUR = 17;
 export interface ReminderState {
   /** Days in a row the goal was met, not counting today unless already met. */
   streak: number;
+  /** Streak freezes held. One would cover today if it ends without the goal. */
+  freezes: number;
   /** Answers so far today. */
   today: number;
   goal: number;
@@ -74,6 +76,13 @@ export function reminderMessage(state: ReminderState, hoursLeft: number): Remind
 
   if (!state.todayDone) {
     const cards = `${left} more ${left === 1 ? "card" : "cards"}`;
+    if (state.streak > 0 && state.freezes > 0) {
+      return {
+        title: `Your ${state.streak}-day streak needs ${cards}`,
+        body: `If today gets away, a streak freeze covers it.${word}`,
+        url: "/",
+      };
+    }
     if (state.streak > 0) {
       return {
         title: `Your ${state.streak}-day streak ends in ${timeLeft(hoursLeft)}`,

@@ -153,6 +153,7 @@ export async function runReminders(now: Date = new Date(), send: Sender = webPus
   const message = reminderMessage(
     {
       streak: player.streak,
+      freezes: player.freezes,
       today: player.today,
       goal: player.goal,
       todayDone: player.todayDone,

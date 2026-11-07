@@ -158,29 +158,37 @@ export interface StreakInfo {
   todayDone: boolean;
 }
 
+const NO_DAYS: ReadonlySet<string> = new Set();
+
 /**
  * A day counts towards the streak when its answers reach the goal. Today not
  * being done yet does not break anything: the streak runs through yesterday
  * until the day is over.
+ *
+ * `frozen` days are missed days a streak freeze covered. They keep the streak
+ * going without adding to it.
  */
 export function streakFrom(
   counts: ReadonlyMap<string, number>,
   today: string,
   goal: number,
+  frozen: ReadonlySet<string> = NO_DAYS,
 ): StreakInfo {
   const met = (day: string) => (counts.get(day) ?? 0) >= goal;
+  const kept = (day: string) => met(day) || frozen.has(day);
   const todayDone = met(today);
 
   let current = 0;
-  for (let day = todayDone ? today : previousDay(today); met(day); day = previousDay(day)) {
-    current += 1;
+  for (let day = todayDone ? today : previousDay(today); kept(day); day = previousDay(day)) {
+    if (met(day)) current += 1;
   }
 
   let best = 0;
   let run = 0;
   let previous: string | null = null;
-  for (const day of [...counts.keys()].filter(met).sort()) {
-    run = previous !== null && previousDay(day) === previous ? run + 1 : 1;
+  for (const day of [...new Set([...[...counts.keys()].filter(met), ...frozen])].sort()) {
+    if (previous === null || previousDay(day) !== previous) run = 0;
+    if (met(day)) run += 1;
     best = Math.max(best, run);
     previous = day;
   }
@@ -193,6 +201,8 @@ export interface WeekDay {
   letter: string;
   count: number;
   met: boolean;
+  /** A missed day a streak freeze covered. */
+  frozen: boolean;
   isToday: boolean;
 }
 
@@ -201,11 +211,20 @@ export function lastSevenDays(
   counts: ReadonlyMap<string, number>,
   today: string,
   goal: number,
+  frozen: ReadonlySet<string> = NO_DAYS,
 ): WeekDay[] {
   const days: string[] = [today];
   while (days.length < 7) days.unshift(previousDay(days[0]));
   return days.map((day) => {
     const count = counts.get(day) ?? 0;
-    return { day, letter: weekdayLetter(day), count, met: count >= goal, isToday: day === today };
+    const met = count >= goal;
+    return {
+      day,
+      letter: weekdayLetter(day),
+      count,
+      met,
+      frozen: !met && frozen.has(day),
+      isToday: day === today,
+    };
   });
 }

@@ -145,6 +145,27 @@ describe("streakFrom", () => {
   it("is zero with no history", () => {
     assert.equal(streakFrom(new Map(), "2026-10-31", goal).current, 0);
   });
+
+  it("runs through a frozen day without counting it", () => {
+    const counts = new Map([
+      ["2026-10-27", 10],
+      ["2026-10-28", 10],
+      ["2026-10-30", 10],
+    ]);
+    const frozen = new Set(["2026-10-29"]);
+    assert.deepEqual(streakFrom(counts, "2026-10-31", goal, frozen), {
+      current: 3,
+      best: 3,
+      todayDone: false,
+    });
+    // Without the freeze the 29th breaks it.
+    assert.equal(streakFrom(counts, "2026-10-31", goal).current, 1);
+  });
+
+  it("keeps the streak while yesterday itself is frozen", () => {
+    const counts = new Map([["2026-10-29", 10]]);
+    assert.equal(streakFrom(counts, "2026-10-31", goal, new Set(["2026-10-30"])).current, 1);
+  });
 });
 
 describe("lastSevenDays", () => {
@@ -156,5 +177,11 @@ describe("lastSevenDays", () => {
     assert.equal(week[6].isToday, true);
     assert.equal(week[6].met, true);
     assert.equal(week[5].met, false);
+  });
+
+  it("marks the days a freeze covered", () => {
+    const week = lastSevenDays(new Map(), "2026-10-31", 20, new Set(["2026-10-30"]));
+    assert.equal(week[5].frozen, true);
+    assert.equal(week[4].frozen, false);
   });
 });
