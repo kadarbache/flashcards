@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { addWordToDeck, defineWord, removeWordFromDeck } from "@/app/watch/actions";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { play } from "@/components/game/sound";
 import { CheckIcon, CloseIcon, MinusIcon, PlusIcon } from "@/components/icons";
 import { Sheet } from "@/components/sheet";
@@ -147,6 +148,8 @@ function SheetBody({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  /** The saved card the remove dialog is asking about. */
+  const [removing, setRemoving] = useState<SavedCard | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,21 +214,12 @@ function SheetBody({
     }
   }
 
+  /** Runs once the remove dialog's hold is done. A failure stays in the dialog to try again. */
   async function remove(card: SavedCard) {
-    if (busy) return;
-    const question = `Remove “${card.front}” from ${deckName(card.deckId)}? Its review history goes with it.`;
-    if (!window.confirm(question)) return;
-    setBusy(true);
     setError(null);
-    try {
-      const outcome = await removeWordFromDeck(card.id);
-      onRemoved(card.id);
-      finish(outcome.message);
-    } catch {
-      setError("That could not be removed. Try again.");
-    } finally {
-      setBusy(false);
-    }
+    const outcome = await removeWordFromDeck(card.id);
+    onRemoved(card.id);
+    finish(outcome.message);
   }
 
   return (
@@ -360,9 +354,18 @@ function SheetBody({
           )}
 
           {savedHere ? (
-            <button type="button" className={removeButton} disabled={busy} onClick={() => void remove(savedHere)}>
+            <button
+              type="button"
+              className={removeButton}
+              disabled={busy}
+              aria-haspopup="dialog"
+              onClick={() => {
+                play("tap");
+                setRemoving(savedHere);
+              }}
+            >
               <MinusIcon className="h-5 w-5" />
-              {busy ? "Removing…" : "Remove from deck"}
+              Remove from deck
             </button>
           ) : (
             <button
@@ -376,6 +379,19 @@ function SheetBody({
           )}
         </form>
       )}
+
+      <ConfirmDelete
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        title="Remove this word?"
+        name={removing?.front ?? ""}
+        detail={`It comes out of ${removing ? deckName(removing.deckId) : "the deck"}, and its review history goes with it. This cannot be undone.`}
+        holdLabel="Hold to remove"
+        busyLabel="Removing…"
+        onConfirm={async () => {
+          if (removing) await remove(removing);
+        }}
+      />
     </div>
   );
 }

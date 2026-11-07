@@ -79,6 +79,7 @@ export function ReviewCard({
   aiVoice: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
   const stamps = useRef<Partial<Record<Direction, HTMLDivElement | null>>>({});
 
   function paintStamps(direction: Direction | null, progress: number) {
@@ -215,6 +216,7 @@ export function ReviewCard({
 
       <div className="absolute top-3.5 right-3.5 z-20">
         <button
+          ref={menuButton}
           type="button"
           onClick={() => setMenuOpen((was) => !was)}
           aria-label="Card options"
@@ -237,6 +239,8 @@ export function ReviewCard({
             <button
               type="button"
               onClick={() => {
+                // The menu closes, so the dialog hands the focus back to its button.
+                menuButton.current?.focus();
                 setMenuOpen(false);
                 onDelete();
               }}

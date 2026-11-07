@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { deleteCard, deleteDeck } from "@/app/actions";
 import { CardForm } from "@/components/card-form";
+import { DeleteButton } from "@/components/confirm-delete";
 import { ArrowIcon, BoltIcon, CheckIcon, PlayIcon, SwapIcon, TrophyIcon } from "@/components/icons";
 import { ImportForm } from "@/components/import-form";
 import { SettingsForm } from "@/components/settings-form";
@@ -141,15 +142,16 @@ export default async function DeckPage({ params }: PageProps<"/decks/[id]">) {
           <p className="text-sm text-ink-muted">
             Removes the deck, its {cards.length} cards and their history. This cannot be undone.
           </p>
-          <form action={deleteDeck}>
-            <input type="hidden" name="deckId" value={deck.id} />
-            <button
-              type="submit"
-              className="inline-flex min-h-11 items-center rounded-2xl border border-again/50 px-4 text-sm font-bold text-again transition hover:bg-again/15"
-            >
-              Delete this deck
-            </button>
-          </form>
+          <DeleteButton
+            action={deleteDeck}
+            fields={{ deckId: deck.id }}
+            title="Delete this deck?"
+            name={deck.name}
+            detail={`Its ${cards.length} ${cards.length === 1 ? "card goes" : "cards go"} with it, and all their history. This cannot be undone.`}
+            className="inline-flex min-h-11 items-center rounded-2xl border border-again/50 px-4 text-sm font-bold text-again transition hover:bg-again/15"
+          >
+            Delete this deck
+          </DeleteButton>
         </section>
       </div>
     </div>
@@ -182,17 +184,17 @@ function CardRow({ card, deckId }: { card: CardSummary; deckId: string }) {
           <span title="Ease factor">ease {card.ease.toFixed(2)}</span>
         </p>
       </div>
-      <form action={deleteCard}>
-        <input type="hidden" name="cardId" value={card.id} />
-        <input type="hidden" name="deckId" value={deckId} />
-        <button
-          type="submit"
-          className="rounded-full px-2.5 py-1 text-xs font-bold text-again transition hover:bg-again/15"
-          aria-label={`Delete ${card.front}`}
-        >
-          Delete
-        </button>
-      </form>
+      <DeleteButton
+        action={deleteCard}
+        fields={{ cardId: card.id, deckId }}
+        title="Delete this card?"
+        name={card.front}
+        detail="Its review history goes with it. This cannot be undone."
+        className="rounded-full px-2.5 py-1 text-xs font-bold text-again transition hover:bg-again/15"
+        ariaLabel={`Delete ${card.front}`}
+      >
+        Delete
+      </DeleteButton>
     </li>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { deleteCardAndContinue, gradeCard, refreshQueue, undoLastGrade } from "@/app/actions";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { Confetti, Floats, buzz, type FloatText } from "@/components/game/effects";
 import { ARROW_KEYS, MOVES, moveFor, type GradeMove } from "@/components/game/grades";
 import { GoalRing, LevelBar, MultiplierPill, StreakPill } from "@/components/game/hud";
@@ -85,6 +86,8 @@ export function ReviewSession({
   const [floats, setFloats] = useState<FloatText[]>([]);
   const [confetti, setConfetti] = useState(0);
   const [toast, setToast] = useState<Toast | null>(null);
+  /** The card the delete dialog is asking about, kept while the next card loads in. */
+  const [confirmingDelete, setConfirmingDelete] = useState<{ id: string; front: string } | null>(null);
 
   /** When the current card went on screen, for the answer-time log. */
   const shownAt = useRef<number | null>(null);
@@ -299,11 +302,10 @@ export function ReviewSession({
     void run(() => refreshQueue(deckId, { exclude: [] }));
   }, [deckId, run]);
 
-  const removeCard = useCallback(() => {
-    if (!card) return;
-    if (!window.confirm("Delete this card for good? Its history goes with it.")) return;
-    void run(() => deleteCardAndContinue(card.id, deckId, { exclude: skipped }));
-  }, [card, deckId, run, skipped]);
+  const removeCard = useCallback(
+    (cardId: string) => run(() => deleteCardAndContinue(cardId, deckId, { exclude: skipped })),
+    [deckId, run, skipped],
+  );
 
   // Space or Enter flips. Once face up, the arrows answer the way a swipe
   // would (left Again, down Hard, right Good, up Easy), and so do 1-4.
@@ -312,7 +314,7 @@ export function ReviewSession({
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      if (!card) return;
+      if (!card || confirmingDelete) return;
 
       const key = event.key.toLowerCase();
       if (key === "u") {
@@ -343,7 +345,7 @@ export function ReviewSession({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [answer, card, flip, flipped, leaving, pending, queue.reviewedToday, skip, undo]);
+  }, [answer, card, confirmingDelete, flip, flipped, leaving, pending, queue.reviewedToday, skip, undo]);
 
   const progress = tally.answered / Math.max(1, tally.answered + remaining);
 
@@ -439,7 +441,7 @@ export function ReviewSession({
                 total={tally.answered + remaining}
                 deckId={deckId}
                 deckName={deckName}
-                onDelete={removeCard}
+                onDelete={() => setConfirmingDelete({ id: card.id, front: card.front })}
                 aiVoice={aiVoice}
               />
 
@@ -516,6 +518,17 @@ export function ReviewSession({
           />
         </div>
       )}
+
+      <ConfirmDelete
+        open={confirmingDelete !== null}
+        onClose={() => setConfirmingDelete(null)}
+        title="Delete this card?"
+        name={confirmingDelete?.front ?? ""}
+        detail="Its review history goes with it. This cannot be undone."
+        onConfirm={async () => {
+          if (confirmingDelete) await removeCard(confirmingDelete.id);
+        }}
+      />
     </div>
   );
 }

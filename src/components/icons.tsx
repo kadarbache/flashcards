@@ -427,3 +427,16 @@ export function ShareIcon({ className }: IconProps) {
     </Line>
   );
 }
+
+/** A bin, for deleting. */
+export function TrashIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M4 7h16" />
+      <path d="M9.5 7V4.5h5V7" />
+      <path d="M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h6a1.5 1.5 0 0 0 1.5-1.5l1-12.5" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </Line>
+  );
+}
