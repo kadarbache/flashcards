@@ -299,6 +299,16 @@ export function SnowflakeIcon({ className }: IconProps) {
   );
 }
 
+/** The word finder: a magnifying glass, for a word you can describe but not name. */
+export function SearchIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 5 5" />
+    </Line>
+  );
+}
+
 /** Word of the Day: a sun, for one new word each morning. */
 export function SunIcon({ className }: IconProps) {
   return (

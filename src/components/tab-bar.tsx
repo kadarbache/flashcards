@@ -14,6 +14,7 @@ import {
   HelpIcon,
   HomeIcon,
   PlusIcon,
+  SearchIcon,
   SignOutIcon,
   SunIcon,
   UserIcon,
@@ -77,7 +78,8 @@ export function TabBar() {
   const close = () => setSheet(null);
   const [home, watch, word] = TABS;
   const moreActive =
-    sheet === "more" || ["/collection", "/help", "/boss", "/recap"].some((path) => pathname.startsWith(path));
+    sheet === "more" ||
+    ["/find", "/collection", "/help", "/boss", "/recap"].some((path) => pathname.startsWith(path));
 
   return (
     <>
@@ -132,6 +134,15 @@ export function TabBar() {
         <div className={sheetBody}>
           <SheetTitle title="More" onClose={close} />
           <ul className="space-y-1">
+            <li>
+              <Link href="/find" onClick={close} className={row}>
+                <SearchIcon className="h-5 w-5 text-easy" />
+                <span>
+                  <span className="block font-bold">Find a word</span>
+                  <span className="block text-xs text-ink-muted">Describe a word you forgot to find its card</span>
+                </span>
+              </Link>
+            </li>
             <li>
               <Link href="/boss" onClick={close} className={row}>
                 <BossIcon className="h-5 w-5 text-again" />
