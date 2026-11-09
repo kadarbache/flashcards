@@ -361,6 +361,11 @@ and a speaker. Follow-ups work ("no, a verb"), since the earlier messages go
 along with each question. When none of your cards fit, it says so and gives
 the English word you most likely mean.
 
+It is laid out like an AI chat app: the conversation scrolls, the box to type
+in stays at the bottom of the screen (Enter sends, Shift+Enter starts a new
+line), and on phones the tab bar steps aside for it. Nothing is saved: **New
+chat**, or leaving the page, starts fresh.
+
 There is no search index. Every card's word, meaning and example go to a
 Gemini model with each question, numbered, and the model answers with a short
 reply and the numbers of the cards that fit. 130 cards are about 4,500 tokens,
