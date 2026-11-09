@@ -352,6 +352,29 @@ is asked. Without a key, or when Google is out of allowance, slow or down, the
 device speaks instead, with the most natural English voice it has: Edge's
 "Natural" voices, Chrome's Google voice, Apple's Premium downloads.
 
+## Find a word
+
+`/find` is for the word you can describe but not name. Type what it means
+("that word for knowing something without thinking it through") and the
+answer names it, with its card underneath: the word, the meaning, its deck
+and a speaker. Follow-ups work ("no, a verb"), since the earlier messages go
+along with each question. When none of your cards fit, it says so and gives
+the English word you most likely mean.
+
+There is no search index. Every card's word, meaning and example go to a
+Gemini model with each question, numbered, and the model answers with a short
+reply and the numbers of the cards that fit. 130 cards are about 4,500 tokens,
+so each question costs a fraction of a cent, and on the free tier nothing.
+Past about 200,000 characters of cards the examples are left out to keep it
+quick. A collection in the tens of thousands of cards would want a vector
+index instead (Atlas Vector Search, on the same `cards` collection).
+
+It uses `GEMINI_API_KEY`, the same free key as the AI voice; without one the
+page says how to add it. The model is `gemini-3.5-flash-lite` unless
+`GEMINI_CHAT_MODEL` names another. Of the models tried it was the quickest,
+about a second a question, and the one that said "not in your cards" rather
+than offering a loosely related card.
+
 ## Evening reminder
 
 Turn it on from the home screen, per device. Once a day the job at
