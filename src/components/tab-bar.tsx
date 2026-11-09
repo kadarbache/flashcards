@@ -25,10 +25,11 @@ import { SoundChoices } from "@/components/sound-menu";
 import { iconButton, secondaryButton } from "@/components/ui";
 
 /**
- * Screens without the bar: signing in, and the games, which fill the screen
- * and have their own way back.
+ * Screens without the bar: signing in, the games, and the word finder's chat,
+ * which fill the screen and have their own way back. The chat keeps the
+ * bottom of the screen for its box to type in.
  */
-const HIDDEN = /^\/(login|offline)(\/|$)|^\/decks\/[^/]+\/(review|practice|blitz)(\/|$)/;
+const HIDDEN = /^\/(login|offline|find)(\/|$)|^\/decks\/[^/]+\/(review|practice|blitz)(\/|$)/;
 
 const TABS = [
   {
@@ -78,8 +79,7 @@ export function TabBar() {
   const close = () => setSheet(null);
   const [home, watch, word] = TABS;
   const moreActive =
-    sheet === "more" ||
-    ["/find", "/collection", "/help", "/boss", "/recap"].some((path) => pathname.startsWith(path));
+    sheet === "more" || ["/collection", "/help", "/boss", "/recap"].some((path) => pathname.startsWith(path));
 
   return (
     <>
