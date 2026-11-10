@@ -354,25 +354,41 @@ device speaks instead, with the most natural English voice it has: Edge's
 
 ## Find a word
 
-`/find` is for the word you can describe but not name. Type what it means
-("that word for knowing something without thinking it through") and the
-answer names it, with its card underneath: the word, the meaning, its deck
-and a speaker. Follow-ups work ("no, a verb"), since the earlier messages go
-along with each question. When none of your cards fit, it says so and gives
-the English word you most likely mean.
+`/find` is a chat about your own words. Describe one you can't name ("that
+word for knowing something without thinking it through") and the answer
+names it, with its card underneath: the word, the meaning, its deck and a
+speaker. When none of your cards fit, it says so and gives the English word
+you most likely mean.
+
+Then keep talking about it: how to use it, example sentences, whether it's
+formal, how it differs from another word. It answers like a tutor, from its
+own knowledge of English rather than only what the card says, with bold
+words and bullet lists where they help. A word's card shows once, the first
+time the word comes up; follow-ups about it get an answer, not the card
+again. The earlier messages go along with each question, so "and how is that
+different from accurate?" works. If Gemini is overloaded, before an answer or
+partway through one, the question is asked up to three times, alternating
+with a spare model (`gemini-3.5-flash`); an answer that broke off is taken
+down and types out again from the start.
 
 It is laid out like an AI chat app: the conversation scrolls, the box to type
 in stays at the bottom of the screen (Enter sends, Shift+Enter starts a new
-line), and on phones the tab bar steps aside for it. Nothing is saved: **New
-chat**, or leaving the page, starts fresh.
+line), and on phones the tab bar steps aside for it. Answers appear word by
+word as they are written, and the chat follows them down unless you scroll
+up to read. While one is coming in, the send button becomes a stop button;
+stopping keeps what was written so far. Nothing is saved: **New chat**, or
+leaving the page, starts fresh.
 
 There is no search index. Every card's word, meaning and example go to a
-Gemini model with each question, numbered, and the model answers with a short
-reply and the numbers of the cards that fit. 130 cards are about 4,500 tokens,
-so each question costs a fraction of a cent, and on the free tier nothing.
-Past about 200,000 characters of cards the examples are left out to keep it
-quick. A collection in the tens of thousands of cards would want a vector
-index instead (Atlas Vector Search, on the same `cards` collection).
+Gemini model with each question, numbered, and the model answers with its
+reply and the numbers of the cards that fit. The answer streams from Gemini
+through `POST /find/chat`, which passes the reply on a line at a time as it
+grows and sends the cards once it is complete. 130 cards are about 4,500
+tokens, so each question costs a fraction of a cent, and on the free tier
+nothing. Past about 200,000 characters of cards the examples are left out
+to keep it quick. A collection in the tens of thousands of cards would want
+a vector index instead (Atlas Vector Search, on the same `cards`
+collection).
 
 It uses `GEMINI_API_KEY`, the same free key as the AI voice; without one the
 page says how to add it. The model is `gemini-3.5-flash-lite` unless
