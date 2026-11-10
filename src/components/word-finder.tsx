@@ -1,31 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
-import { askWordFinder } from "@/app/find/actions";
 import { ArrowIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { cardSpeaker, SpeakerButton } from "@/components/speaker";
 import { iconButton, panel } from "@/components/ui";
-import { MAX_MESSAGE, type FinderMatch, type FinderOutcome } from "@/lib/word-finder";
+import { parseChatText, settleWriting, type Span } from "@/lib/chat-text";
+import {
+  MAX_MESSAGE,
+  readLines,
+  type FinderEvent,
+  type FinderFailure,
+  type FinderMatch,
+} from "@/lib/word-finder";
 
 type Message =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "assistant"; text: string; matches: FinderMatch[] };
+  /** `cut` when the answer stopped before it was finished, by stop or by failure. */
+  | { id: number; role: "assistant"; text: string; matches: FinderMatch[]; cut?: boolean };
 
 /** Ways to start, for an empty chat. Tapping one asks it. */
 const STARTERS = [
   "That word for knowing something without thinking it through",
   "A word that means very exact",
-  "The verb for making something better",
+  "How do I use “precise” in a sentence?",
 ];
 
-const FAILURES: Record<Exclude<FinderOutcome, { ok: true }>["reason"], string> = {
+type Failure = FinderFailure | "signed-out";
+
+const FAILURES: Record<Failure, string> = {
   "no-key": "The word finder needs GEMINI_API_KEY on the server.",
   "no-cards": "There are no cards to look through yet.",
   "bad-question": "That question could not be read. Try asking it again.",
   failed: "No answer came back just now. Try again in a moment.",
+  "signed-out": "You were signed out. Reload the page to sign in again.",
 };
+
+/** When an answer stops partway, what was written stays in the chat. */
+const CUT_OFF = "The answer stopped partway. Ask again for the rest.";
 
 /**
  * The bar along the top. On phones it stays put while the chat scrolls under
@@ -37,11 +50,13 @@ const topBar =
   "sticky top-0 z-20 -mx-4 mt-[calc(-1*(env(safe-area-inset-top)+1.25rem))] flex items-center gap-2.5 border-b border-white/5 bg-ground/85 px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 backdrop-blur-md md:static md:mx-0 md:mt-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none";
 
 /**
- * A chat for finding a word you forgot, laid out like an AI chat app: the
- * conversation scrolls, the box to type in stays at the bottom of the screen.
- * Describe what the word means and the AI looks through every card for it.
- * Follow-ups like "no, a verb" work, since the earlier messages go along with
- * each question. Nothing is kept: leaving the page or "New chat" starts fresh.
+ * A chat about your words, laid out like an AI chat app: the conversation
+ * scrolls, the box to type in stays at the bottom of the screen. Describe a
+ * word you forgot and the AI names it, with its card; then ask anything about
+ * it (how to use it, examples, how it differs from another word) and it
+ * answers like a tutor. Answers type out as they are written, and the send
+ * button stops one. A card shows once, the first time its word comes up.
+ * Nothing is kept: leaving the page or "New chat" starts fresh.
  */
 export function WordFinder({
   cardCount,
@@ -60,9 +75,17 @@ export function WordFinder({
   const nextId = useRef(0);
   const composer = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const log = useRef<HTMLOListElement>(null);
+  /** Stops the answer being written. */
+  const answering = useRef<AbortController | null>(null);
+  /** Whether to keep scrolling down as an answer grows. */
+  const following = useRef(true);
 
   const usable = ready && cardCount > 0;
   const empty = messages.length === 0 && !pending;
+  const last = messages.at(-1);
+  /** The answer still being written, once its first words are in. */
+  const writingId = pending && last?.role === "assistant" ? last.id : null;
 
   // The box is fixed to the bottom of the screen, over the page. Leave that
   // much room under the last message, however tall the box grows.
@@ -74,40 +97,129 @@ export function WordFinder({
     return () => observer.disconnect();
   }, [usable]);
 
+  // Scrolling up to read stops the chat following an answer down; scrolling
+  // back to the bottom starts it again.
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const fromBottom = document.documentElement.scrollHeight - window.innerHeight - y;
+      if (fromBottom < 80) following.current = true;
+      else if (y < lastY) following.current = false;
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // Keep the newest message in view, just above the box.
   useEffect(() => {
-    if (empty) return;
+    if (empty || !following.current) return;
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
   }, [empty, messages.length, pending, composerHeight]);
+
+  // And stay at the bottom as an answer types out and pushes the page longer.
+  useEffect(() => {
+    const list = log.current;
+    if (!list) return;
+    const observer = new ResizeObserver(() => {
+      if (following.current) window.scrollTo({ top: document.documentElement.scrollHeight });
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [empty]);
+
+  // Leaving the page stops an answer still being written, and Gemini with it.
+  useEffect(() => () => answering.current?.abort(), []);
 
   async function ask(text: string) {
     const question = text.trim();
     if (question === "" || pending) return;
 
     const asked: Message = { id: nextId.current++, role: "user", text: question };
+    let answerId = nextId.current++;
     const conversation = [...messages, asked];
     setMessages(conversation);
     setDraft("");
     setError(null);
     setPending(true);
+    following.current = true;
 
-    let outcome: FinderOutcome;
+    // A card shows once a chat, the first time its word comes up. Follow-ups
+    // about that word get an answer, not the same card again.
+    const shown = new Set(
+      messages.flatMap((message) => (message.role === "assistant" ? message.matches.map((card) => card.id) : [])),
+    );
+    const showAnswer = (text: string, matches: FinderMatch[] = []) => {
+      // Taken now: React runs the update later, perhaps after a restart has moved on to a new id.
+      const id = answerId;
+      setMessages((current) => [
+        ...current.filter((message) => message.id !== id),
+        { id, role: "assistant", text, matches: matches.filter((card) => !shown.has(card.id)) },
+      ]);
+    };
+
+    const controller = new AbortController();
+    answering.current = controller;
+    let written = "";
+    let finished = false;
+    let failure: Failure | null = null;
     try {
-      outcome = await askWordFinder(conversation.map(({ role, text }) => ({ role, text })));
+      const response = await fetch("/find/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ conversation: conversation.map(({ role, text }) => ({ role, text })) }),
+        // Signed out, the proxy answers with a redirect to the login page.
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      if (response.status === 401 || response.type === "opaqueredirect") {
+        failure = "signed-out";
+      } else if (!response.ok || !response.body) {
+        failure = "failed";
+      } else {
+        for await (const line of readLines(response.body)) {
+          if (line.trim() === "") continue;
+          const event = JSON.parse(line) as FinderEvent;
+          if ("text" in event) {
+            written += event.text;
+            showAnswer(written);
+          } else if ("restart" in event) {
+            // Gemini broke off and is starting over. Take down what it wrote,
+            // and the new answer types out afresh under a new id.
+            const broken = answerId;
+            answerId = nextId.current++;
+            written = "";
+            setMessages((current) => current.filter((message) => message.id !== broken));
+          } else if ("done" in event) {
+            finished = true;
+            showAnswer(event.reply, event.matches);
+          } else {
+            failure = event.error;
+          }
+        }
+        if (!finished) failure ??= "failed";
+      }
     } catch {
-      outcome = { ok: false, reason: "failed" };
+      // A network error, or stopped on purpose.
+      if (!controller.signal.aborted) failure = "failed";
     }
+    answering.current = null;
 
-    if (outcome.ok) {
-      const { reply, matches } = outcome;
-      setMessages((current) => [...current, { id: nextId.current++, role: "assistant", text: reply, matches }]);
-    } else {
-      // Take the question back off the chat and put it back in the box, so
-      // trying again is one tap and the chat never holds a question with no answer.
-      setMessages((current) => current.filter((message) => message.id !== asked.id));
+    const lastId = answerId;
+    if (!finished && written.trim() === "") {
+      // Nothing came. Take the question back off the chat and put it back in
+      // the box, so trying again is one tap and the chat never holds a
+      // question with no answer.
+      setMessages((current) => current.filter((message) => message.id !== asked.id && message.id !== lastId));
       setDraft(question);
-      setError(FAILURES[outcome.reason]);
+    } else if (!finished) {
+      // Show what came straight away, rather than go on typing after a stop.
+      setMessages((current) =>
+        current.map((message) => (message.id === lastId ? { ...message, cut: true } : message)),
+      );
     }
+    if (failure) setError(written.trim() === "" ? FAILURES[failure] : CUT_OFF);
     setPending(false);
   }
 
@@ -160,7 +272,14 @@ export function WordFinder({
       ) : empty ? (
         <Welcome cardCount={cardCount} onPick={(starter) => void ask(starter)} />
       ) : (
-        <ol role="log" aria-live="polite" aria-label="Conversation" className="space-y-6 pt-6">
+        <ol
+          ref={log}
+          role="log"
+          aria-live="polite"
+          aria-busy={pending}
+          aria-label="Conversation"
+          className="space-y-6 pt-6"
+        >
           {messages.map((message) =>
             message.role === "user" ? (
               <li key={message.id} className="flex justify-end">
@@ -169,25 +288,13 @@ export function WordFinder({
                 </p>
               </li>
             ) : (
-              <li key={message.id} className="anim-rise flex gap-3">
-                <Avatar />
-                <div className="min-w-0 flex-1 space-y-3 pt-1">
-                  <p className="leading-relaxed break-words">{message.text}</p>
-                  {message.matches.length > 0 && (
-                    <ul className="grid gap-2 sm:grid-cols-2" aria-label="Matching cards">
-                      {message.matches.map((card) => (
-                        <MatchCard key={card.id} card={card} aiVoice={aiVoice} />
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </li>
+              <Answer key={message.id} message={message} writing={message.id === writingId} aiVoice={aiVoice} />
             ),
           )}
-          {pending && (
+          {pending && writingId === null && (
             <li className="flex gap-3">
               <Avatar />
-              <p className="flex h-8 items-center gap-1.5" aria-label="Looking through your cards">
+              <p className="flex h-8 items-center gap-1.5" aria-label="Thinking">
                 {[0, 150, 300].map((delay) => (
                   <span
                     key={delay}
@@ -224,7 +331,7 @@ export function WordFinder({
               )}
               <div className="flex items-end gap-2 rounded-[1.75rem] border border-border-subtle bg-surface-raised p-2 pl-5 shadow-[0_12px_32px_-12px_rgba(0,0,0,.8)] transition focus-within:border-gold/60">
                 <label htmlFor="word-finder-question" className="sr-only">
-                  Describe the word
+                  Ask about your words
                 </label>
                 <textarea
                   ref={input}
@@ -240,23 +347,34 @@ export function WordFinder({
                       void ask(draft);
                     }
                   }}
-                  placeholder={messages.length === 0 ? "Describe the word you forgot" : "Ask a follow-up"}
+                  placeholder={messages.length === 0 ? "Describe a word, or ask about one" : "Ask anything about it"}
                   maxLength={MAX_MESSAGE}
                   enterKeyHint="send"
                   autoComplete="off"
                   className="field-sizing-content max-h-40 min-h-10 flex-1 resize-none bg-transparent py-2 text-base text-ink outline-none placeholder:text-ink-muted/60"
                 />
-                <button
-                  type="submit"
-                  disabled={pending || draft.trim() === ""}
-                  aria-label="Ask"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold text-paper-ink transition active:scale-90 disabled:bg-surface-high disabled:text-ink-muted"
-                >
-                  <ArrowIcon direction="up" className="h-5 w-5" />
-                </button>
+                {pending ? (
+                  <button
+                    type="button"
+                    onClick={() => answering.current?.abort()}
+                    aria-label="Stop the answer"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold text-paper-ink transition active:scale-90"
+                  >
+                    <span aria-hidden="true" className="h-3.5 w-3.5 rounded-[3px] bg-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={draft.trim() === ""}
+                    aria-label="Ask"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold text-paper-ink transition active:scale-90 disabled:bg-surface-high disabled:text-ink-muted"
+                  >
+                    <ArrowIcon direction="up" className="h-5 w-5" />
+                  </button>
+                )}
               </div>
               <p className="mt-2 text-center text-xs text-ink-muted">
-                Looks through your cards only. Answers can be wrong.
+                Knows the words in your cards. Answers can be wrong.
               </p>
             </form>
           </div>
@@ -276,7 +394,8 @@ function Welcome({ cardCount, onPick }: { cardCount: number; onPick: (starter: s
       <div className="space-y-1.5">
         <h2 className="text-2xl font-extrabold tracking-tight">Which word is it?</h2>
         <p className="mx-auto max-w-sm text-ink-muted">
-          Describe what it means, and I&rsquo;ll find it in your {cardCount} {cardCount === 1 ? "card" : "cards"}.
+          Describe what it means and I&rsquo;ll find it in your {cardCount} {cardCount === 1 ? "card" : "cards"}. Then
+          ask me how to use it.
         </p>
       </div>
       <ul className="grid w-full gap-2 sm:grid-cols-3">
@@ -293,6 +412,104 @@ function Welcome({ cardCount, onPick }: { cardCount: number; onPick: (starter: s
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * How much of `text` to show, typed out a few letters a frame. The model's
+ * pieces arrive in bursts of a sentence or more; this evens them out so the
+ * answer reads like typing. It speeds up when far behind, so a long answer
+ * still finishes within a couple of seconds of arriving. `instant` shows it
+ * all at once.
+ */
+function useTypewriter(text: string, instant: boolean): string {
+  const [shown, setShown] = useState(0);
+  const behind = text.length - shown;
+  useEffect(() => {
+    if (instant || behind <= 0) return;
+    const frame = requestAnimationFrame(() =>
+      setShown((current) => Math.min(text.length, current + Math.max(3, Math.ceil(behind / 60)))),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [instant, behind, text.length]);
+  return instant ? text : text.slice(0, shown);
+}
+
+/** An answer, typed out, with its cards underneath once it is all there. */
+function Answer({
+  message,
+  writing,
+  aiVoice,
+}: {
+  message: Extract<Message, { role: "assistant" }>;
+  writing: boolean;
+  aiVoice: boolean;
+}) {
+  const shown = useTypewriter(message.text, message.cut === true);
+  const typing = writing || shown.length < message.text.length;
+  return (
+    <li className="anim-rise flex gap-3">
+      <Avatar />
+      <div className="min-w-0 flex-1 space-y-3 pt-1">
+        <ChatText text={shown} writing={typing} />
+        {!typing && message.matches.length > 0 && (
+          <ul className="anim-rise grid gap-2 sm:grid-cols-2" aria-label="Matching cards">
+            {message.matches.map((card) => (
+              <MatchCard key={card.id} card={card} aiVoice={aiVoice} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** An answer's text: paragraphs, lists, bold and italic. `writing` while it is still coming in. */
+function ChatText({ text, writing = false }: { text: string; writing?: boolean }) {
+  return (
+    <div className="space-y-3 leading-relaxed break-words">
+      {parseChatText(writing ? settleWriting(text) : text).map((block, index) =>
+        block.kind === "paragraph" ? (
+          <p key={index}>
+            {block.lines.map((line, lineIndex) => (
+              <Fragment key={lineIndex}>
+                {lineIndex > 0 && <br />}
+                <Spans spans={line} />
+              </Fragment>
+            ))}
+          </p>
+        ) : (
+          <ChatList key={index} ordered={block.ordered} items={block.items} />
+        ),
+      )}
+    </div>
+  );
+}
+
+function ChatList({ ordered, items }: { ordered: boolean; items: Span[][] }) {
+  const List = ordered ? "ol" : "ul";
+  return (
+    <List className={`space-y-1.5 pl-5 marker:text-gold ${ordered ? "list-decimal" : "list-disc"}`}>
+      {items.map((item, index) => (
+        <li key={index} className="pl-1">
+          <Spans spans={item} />
+        </li>
+      ))}
+    </List>
+  );
+}
+
+function Spans({ spans }: { spans: Span[] }) {
+  return spans.map((span, index) =>
+    span.bold ? (
+      <strong key={index} className={`font-bold text-ink ${span.italic ? "italic" : ""}`}>
+        {span.text}
+      </strong>
+    ) : span.italic ? (
+      <em key={index}>{span.text}</em>
+    ) : (
+      <Fragment key={index}>{span.text}</Fragment>
+    ),
   );
 }
 

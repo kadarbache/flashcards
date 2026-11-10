@@ -1,5 +1,5 @@
 /**
- * The word finder, against a stand-in for Gemini.
+ * The word finder, against a stand-in for Gemini's streamed answers.
  */
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
@@ -7,11 +7,14 @@ import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import {
   DEFAULT_CHAT_MODEL,
   MAX_MESSAGE,
+  SPARE_CHAT_MODEL,
   buildRequest,
   cardList,
   cleanConversation,
   findWords,
   parseAnswer,
+  partialReply,
+  readLines,
   type FinderCard,
 } from "@/lib/word-finder";
 
@@ -36,13 +39,31 @@ const CARDS: FinderCard[] = [
 ];
 
 const ASK = [{ role: "user" as const, text: "the word for very exact" }];
+const PRECISE = { id: "c2", deckId: "d1", deckName: "Obsidian", front: "precise", back: "Exact and accurate." };
 
-function answer(content: unknown) {
-  return Response.json({
-    candidates: [
-      { content: { parts: [{ text: typeof content === "string" ? content : JSON.stringify(content) }] } },
-    ],
+const encoder = new TextEncoder();
+
+/** A body that arrives `size` bytes at a time, splitting lines and characters as a network may. */
+function bytesIn(text: string, size: number): ReadableStream<Uint8Array> {
+  const bytes = encoder.encode(text);
+  return new ReadableStream({
+    start(controller) {
+      for (let at = 0; at < bytes.length; at += size) controller.enqueue(bytes.slice(at, at + size));
+      controller.close();
+    },
   });
+}
+
+/** One of Gemini's server-sent events, carrying a piece of what the model wrote. */
+const event = (text: string) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })}\r\n\r\n`;
+
+/** Gemini writing `content` in `pieces`, delivered a few bytes at a time. */
+function answer(content: unknown, pieces = 3) {
+  const text = typeof content === "string" ? content : JSON.stringify(content);
+  const size = Math.max(1, Math.ceil(text.length / pieces));
+  let events = "";
+  for (let at = 0; at < text.length; at += size) events += event(text.slice(at, at + size));
+  return new Response(bytesIn(events, 7), { headers: { "content-type": "text/event-stream" } });
 }
 
 /** Gemini answers with `replies` in turn. */
@@ -159,57 +180,160 @@ describe("buildRequest", () => {
 
 describe("parseAnswer", () => {
   it("turns card numbers back into cards, once each, ignoring numbers that are not cards", () => {
-    const parsed = parseAnswer(
-      { candidates: [{ content: { parts: [{ text: '{"reply":"That is precise.","cards":[2,2,9,0,1.5,"3"]}' }] } }] },
-      CARDS,
-    );
-    assert.deepEqual(parsed, {
+    assert.deepEqual(parseAnswer('{"reply":"That is precise.","cards":[2,2,9,0,1.5,"3"]}', CARDS), {
       reply: "That is precise.",
-      matches: [
-        { id: "c2", deckId: "d1", deckName: "Obsidian", front: "precise", back: "Exact and accurate." },
-        { id: "c3", deckId: "d2", deckName: "Videos", front: "devout", back: "Very religious." },
-      ],
+      matches: [PRECISE, { id: "c3", deckId: "d2", deckName: "Videos", front: "devout", back: "Very religious." }],
     });
   });
 
   it("reads JSON in a code fence", () => {
-    const parsed = parseAnswer(
-      { candidates: [{ content: { parts: [{ text: '```json\n{"reply":"Not in your cards.","cards":[]}\n```' }] } }] },
-      CARDS,
-    );
-    assert.deepEqual(parsed, { reply: "Not in your cards.", matches: [] });
+    assert.deepEqual(parseAnswer('```json\n{"reply":"Not in your cards.","cards":[]}\n```', CARDS), {
+      reply: "Not in your cards.",
+      matches: [],
+    });
   });
 
   it("gives up on an answer it cannot use", () => {
-    const body = (text: string) => ({ candidates: [{ content: { parts: [{ text }] } }] });
-    assert.equal(parseAnswer({}, CARDS), null);
-    assert.equal(parseAnswer(body("not json"), CARDS), null);
-    assert.equal(parseAnswer(body('{"reply":"  ","cards":[1]}'), CARDS), null);
+    assert.equal(parseAnswer("", CARDS), null);
+    assert.equal(parseAnswer("not json", CARDS), null);
+    assert.equal(parseAnswer('{"reply":"  ","cards":[1]}', CARDS), null);
+    assert.equal(parseAnswer('{"reply":"Cut off mid-', CARDS), null);
+  });
+});
+
+describe("partialReply", () => {
+  it("reads the reply as far as it has been written, escapes and all", () => {
+    assert.equal(partialReply(""), "");
+    assert.equal(partialReply('{"rep'), "");
+    assert.equal(partialReply('{"reply": "'), "");
+    assert.equal(partialReply('{"reply":"It means \\"exa'), 'It means "exa');
+    assert.equal(partialReply('{"reply":"One\\nTwo \\u00e9t\\u00e9","cards":[1]}'), "One\nTwo été");
+  });
+
+  it("waits for the rest of an escape cut off at the end", () => {
+    assert.equal(partialReply('{"reply":"a\\'), "a");
+    assert.equal(partialReply('{"reply":"a\\u00'), "a");
+  });
+
+  it("finds the reply after the cards as well as before", () => {
+    assert.equal(partialReply('{"cards":[1,2],"reply":"Two'), "Two");
+  });
+});
+
+describe("readLines", () => {
+  it("gives whole lines however the bytes are split, across either line ending", async () => {
+    const lines: string[] = [];
+    for await (const line of readLines(bytesIn("one\r\ntwo — café\nthree", 3))) lines.push(line);
+    assert.deepEqual(lines, ["one", "two — café", "three"]);
   });
 });
 
 describe("findWords", () => {
-  it("asks Gemini with the key and answers with the matching cards", async () => {
+  it("asks Gemini for a streamed answer with the key and answers with the matching cards", async () => {
     const gemini = fakeGemini(() => answer({ reply: "You mean precise.", cards: [2] }));
     const outcome = await findWords(ASK, CARDS, { apiKey: "g-test", fetchImpl: gemini.fetchImpl });
 
-    assert.deepEqual(outcome, {
-      ok: true,
-      reply: "You mean precise.",
-      matches: [{ id: "c2", deckId: "d1", deckName: "Obsidian", front: "precise", back: "Exact and accurate." }],
-    });
+    assert.deepEqual(outcome, { ok: true, reply: "You mean precise.", matches: [PRECISE] });
     const [call] = gemini.calls;
     assert.equal(
       call.url,
-      `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_CHAT_MODEL}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_CHAT_MODEL}:streamGenerateContent?alt=sse`,
     );
     assert.equal((call.init?.headers as Record<string, string>)["x-goog-api-key"], "g-test");
+  });
+
+  it("passes the reply on a piece at a time as it is written", async () => {
+    const reply = 'You mean **precise**:\n\n- "Be precise," she said.\n- Précis is its cousin.';
+    const gemini = fakeGemini(() => answer({ reply, cards: [2] }, 9));
+    const pieces: string[] = [];
+    const outcome = await findWords(ASK, CARDS, {
+      apiKey: "k",
+      fetchImpl: gemini.fetchImpl,
+      onText: (text) => pieces.push(text),
+    });
+
+    assert.ok(pieces.length > 3, `only ${pieces.length} pieces`);
+    assert.equal(pieces.join(""), reply);
+    assert.deepEqual(outcome, { ok: true, reply, matches: [PRECISE] });
+  });
+
+  it("starts the reply over when Gemini breaks off partway through it", async () => {
+    const brokenOff = () =>
+      new Response(bytesIn(`${event('{"reply":"Pre')}data: {"error":{"code":503}}\r\n\r\n`, 64));
+    const gemini = fakeGemini(brokenOff, () => answer({ reply: "You mean precise.", cards: [2] }));
+    let written = "";
+    let restarts = 0;
+    const outcome = await findWords(ASK, CARDS, {
+      apiKey: "k",
+      fetchImpl: gemini.fetchImpl,
+      retryDelayMs: 0,
+      onText: (text) => (written += text),
+      onRestart: () => {
+        restarts += 1;
+        written = "";
+      },
+    });
+    assert.equal(restarts, 1);
+    assert.equal(written, "You mean precise.");
+    assert.deepEqual(outcome, { ok: true, reply: "You mean precise.", matches: [PRECISE] });
+
+    const always = fakeGemini(brokenOff, brokenOff, brokenOff);
+    assert.deepEqual(
+      await findWords(ASK, CARDS, { apiKey: "k", fetchImpl: always.fetchImpl, retryDelayMs: 0 }),
+      { ok: false, reason: "failed" },
+    );
+  });
+
+  it("starts over when Gemini breaks off before any of the reply is written", async () => {
+    const gemini = fakeGemini(
+      () => new Response(bytesIn(`${event('{"reply')}data: {"error":{"code":503}}\r\n\r\n`, 64)),
+      () => answer({ reply: "You mean precise.", cards: [2] }),
+    );
+    const pieces: string[] = [];
+    let restarts = 0;
+    const outcome = await findWords(ASK, CARDS, {
+      apiKey: "k",
+      fetchImpl: gemini.fetchImpl,
+      retryDelayMs: 0,
+      onText: (text) => pieces.push(text),
+      onRestart: () => (restarts += 1),
+    });
+    assert.deepEqual(outcome, { ok: true, reply: "You mean precise.", matches: [PRECISE] });
+    assert.equal(pieces.join(""), "You mean precise.");
+    assert.equal(gemini.calls.length, 2);
+    // Nothing had been passed on, so there was nothing to take back.
+    assert.equal(restarts, 0);
+  });
+
+  it("stops partway when its signal is aborted, and hangs up on Gemini", async () => {
+    const stop = new AbortController();
+    let hungUp = false;
+    const fetchImpl = async (_url: string, init?: RequestInit) =>
+      new Response(
+        new ReadableStream({
+          start(stream) {
+            stream.enqueue(encoder.encode(event('{"reply":"Pre')));
+            init?.signal?.addEventListener("abort", () => {
+              hungUp = true;
+              stream.error(init.signal?.reason);
+            });
+          },
+        }),
+      );
+    const outcome = await findWords(ASK, CARDS, {
+      apiKey: "k",
+      fetchImpl,
+      signal: stop.signal,
+      onText: () => stop.abort(),
+    });
+    assert.deepEqual(outcome, { ok: false, reason: "failed" });
+    assert.equal(hungUp, true);
   });
 
   it("uses the model it is given", async () => {
     const gemini = fakeGemini(() => answer({ reply: "Precise.", cards: [] }));
     await findWords(ASK, CARDS, { apiKey: "k", model: " gemini-3.8-flash ", fetchImpl: gemini.fetchImpl });
-    assert.match(gemini.calls[0].url, /\/gemini-3\.8-flash:generateContent$/);
+    assert.match(gemini.calls[0].url, /\/gemini-3\.8-flash:streamGenerateContent\?alt=sse$/);
   });
 
   it("asks again with the model's own thinking when minimal thinking is refused", async () => {
@@ -222,6 +346,33 @@ describe("findWords", () => {
     const [first, second] = gemini.bodies();
     assert.ok("thinkingConfig" in first.generationConfig);
     assert.ok(!("thinkingConfig" in second.generationConfig));
+  });
+
+  it("asks the spare model, then the chosen one again, while Gemini is overloaded", async () => {
+    const busy = () => new Response("", { status: 503 });
+    const recovers = fakeGemini(busy, () => answer({ reply: "Precise.", cards: [2] }));
+    const outcome = await findWords(ASK, CARDS, { apiKey: "k", fetchImpl: recovers.fetchImpl, retryDelayMs: 0 });
+    assert.equal(outcome.ok, true);
+    assert.match(recovers.calls[1].url, new RegExp(`/${SPARE_CHAT_MODEL}:`));
+    const [first, second] = recovers.bodies();
+    assert.deepEqual(first.generationConfig.thinkingConfig, second.generationConfig.thinkingConfig);
+
+    const stuck = fakeGemini(busy, busy, busy);
+    assert.deepEqual(await findWords(ASK, CARDS, { apiKey: "k", fetchImpl: stuck.fetchImpl, retryDelayMs: 0 }), {
+      ok: false,
+      reason: "failed",
+    });
+    assert.deepEqual(
+      stuck.calls.map((call) => call.url.split("/models/")[1].split(":")[0]),
+      [DEFAULT_CHAT_MODEL, SPARE_CHAT_MODEL, DEFAULT_CHAT_MODEL],
+    );
+  });
+
+  it("keeps to one model when the spare is the one chosen", async () => {
+    const busy = () => new Response("", { status: 503 });
+    const gemini = fakeGemini(busy, () => answer({ reply: "Precise.", cards: [2] }));
+    await findWords(ASK, CARDS, { apiKey: "k", model: SPARE_CHAT_MODEL, fetchImpl: gemini.fetchImpl, retryDelayMs: 0 });
+    assert.ok(gemini.calls.every((call) => call.url.includes(`/${SPARE_CHAT_MODEL}:`)));
   });
 
   it("fails quietly when Gemini says no, does not answer, or answers nonsense", async () => {
