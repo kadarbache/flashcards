@@ -14,13 +14,14 @@ import {
   FlameIcon,
   FlipIcon,
   HomeIcon,
+  PlayIcon,
   RestoreIcon,
   SunIcon,
 } from "@/components/icons";
 import { Sheet } from "@/components/sheet";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
 import { optionText } from "@/lib/blitz";
-import { formatDay } from "@/lib/game";
+import { daysBetween, formatDay } from "@/lib/game";
 import {
   cannotRestore,
   type CalendarDay,
@@ -342,6 +343,7 @@ export function WordOfTheDaySession({
           words={data.history}
           days={days}
           answers={answers}
+          today={record.calendar.at(-1)?.day ?? ""}
           onPick={(day) => void pick(day)}
         />
       )}
@@ -436,7 +438,7 @@ function RecordPanel({
   restores: RestoreCards;
   onPick: (day: string) => void;
 }) {
-  const missedDays = record.calendar.filter((day) => day.canRestore).length;
+  const today = record.calendar.at(-1)?.day ?? restores.renewsOn;
   return (
     <section className={`${panel} space-y-4`}>
       <h2 className="text-lg font-extrabold">Your record</h2>
@@ -466,7 +468,7 @@ function RecordPanel({
           </span>
         </p>
       </div>
-      <RestoreShelf restores={restores} missedDays={missedDays} />
+      <RestoreShelf restores={restores} today={today} />
     </section>
   );
 }
@@ -531,32 +533,42 @@ function DayCell({ day, onPick }: { day: CalendarDay; onPick: (day: string) => v
   );
 }
 
-/** The month's restore cards, as card-shaped slots. */
-function RestoreShelf({ restores, missedDays }: { restores: RestoreCards; missedDays: number }) {
-  const cost = `${restores.cost.toLocaleString("en-US")} XP`;
+/** Where each card in the hand sits: tilted out to the sides, the middle one raised. */
+const FAN = ["-rotate-12 -mr-2.5", "-translate-y-1 -mr-2.5", "rotate-12"];
+
+/** The month's restore cards, fanned out like a hand. A used card leaves an empty outline. */
+function RestoreShelf({ restores, today }: { restores: RestoreCards; today: string }) {
+  const days = daysBetween(today, restores.renewsOn);
+  const refill = days === 1 ? "refills tomorrow" : `refills in ${days} days`;
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-surface-high p-3">
-      <div className="flex shrink-0 gap-1.5" aria-hidden="true">
+    <div className="flex items-center gap-4 rounded-2xl bg-surface-high px-4 py-3">
+      <div className="flex shrink-0 pt-1.5 pr-1 pb-0.5 pl-1.5" aria-hidden="true">
         {Array.from({ length: restores.perMonth }, (_, slot) => (
           <span
             key={slot}
-            className={`flex h-10 w-7 items-center justify-center rounded-lg ${
+            className={`relative flex h-[52px] w-[38px] items-center justify-center rounded-[9px] border-2 transition-colors ${
+              FAN[slot % FAN.length]
+            } ${
               slot < restores.left
-                ? "bg-restore text-restore-ink shadow-[0_0_16px_-4px_var(--color-restore)]"
-                : "border-2 border-dashed border-border-subtle text-border-subtle"
+                ? "border-surface-high bg-restore text-restore-ink shadow-[0_0_16px_-4px_var(--color-restore)]"
+                : "border-dashed border-[#3a3458] bg-surface-high text-[#3a3458]"
             }`}
           >
-            <RestoreIcon className="h-4 w-4" />
+            <RestoreIcon className="h-5 w-5" />
           </span>
         ))}
       </div>
       <div className="min-w-0">
-        <p className="font-extrabold">
-          {restores.left} of {restores.perMonth} restore cards left
+        <p className="text-xs font-semibold text-ink-muted">Restore cards</p>
+        <p className="leading-tight font-extrabold tabular-nums">
+          <span className="text-[1.65rem]">{restores.left}</span>{" "}
+          <span className="text-sm font-bold text-ink-muted">of {restores.perMonth} left</span>
         </p>
         <p className="text-xs text-ink-muted">
-          {missedDays > 0 && restores.left > 0 ? "Tap a missed day to bring it back. " : ""}
-          {cost} each. New cards on {formatDay(restores.renewsOn)}.
+          {restores.cost.toLocaleString("en-US")} XP each
+          <span className="hidden sm:inline"> · </span>
+          {/* Its own line on a phone, capitalised there; `::first-letter` skips the inline case. */}
+          <span className="block first-letter:uppercase sm:inline">{refill}</span>
         </p>
       </div>
     </div>
@@ -573,11 +585,11 @@ function Stat({ label, value, color, hint }: { label: string; value: number; col
   );
 }
 
-/** The round badge at the start of a history row. Late answers are outlined, not filled. */
+/** The round badge at the start of a history row. A late answer wears the clock badge on its corner. */
 function ResultDot({ result, restored }: { result: WordResult | null; restored: boolean }) {
   let tone = "bg-surface-high text-ink-muted";
-  if (result === "knew") tone = restored ? "border-2 border-good text-good" : "bg-good text-paper-ink";
-  else if (result === "missed") tone = restored ? "border-2 border-again text-again" : "bg-again text-paper-ink";
+  if (result === "knew") tone = "bg-good text-paper-ink";
+  else if (result === "missed") tone = "bg-again text-paper-ink";
   else if (restored) tone = "border-2 border-dashed border-restore text-restore";
 
   let label = result === "knew" ? "Knew it" : result === "missed" ? "Missed it" : "Not played";
@@ -585,9 +597,10 @@ function ResultDot({ result, restored }: { result: WordResult | null; restored: 
 
   return (
     <span
-      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}
+      className={`relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}
       aria-label={label}
     >
+      {restored && result && <RestoreMark className="absolute -top-1.5 -right-1.5 ring-2 ring-surface-raised" />}
       {result === "knew" ? (
         <CheckIcon className="h-4 w-4" />
       ) : result === "missed" ? (
@@ -605,11 +618,14 @@ function History({
   words,
   days,
   answers,
+  today,
   onPick,
 }: {
   words: DailyWordView[];
   days: ReadonlyMap<string, CalendarDay>;
   answers: Record<string, WordResult>;
+  /** YYYY-MM-DD on the player's calendar. */
+  today: string;
   onPick: (day: string) => void;
 }) {
   return (
@@ -627,16 +643,15 @@ function History({
               <ResultDot result={result} restored={restored} />
               <div className="min-w-0 flex-1">
                 <p className="flex items-baseline justify-between gap-2">
-                  <span className="flex min-w-0 items-baseline gap-2">
-                    <span className="truncate font-extrabold">{word.front}</span>
-                    {restored && (
-                      <span className="shrink-0 rounded-full bg-restore/15 px-2 py-0.5 text-[11px] font-extrabold text-restore">
-                        Restored
-                      </span>
-                    )}
-                  </span>
+                  <span className="truncate font-extrabold">{word.front}</span>
                   <span className="shrink-0 text-xs text-ink-muted">{formatDay(word.day)}</span>
                 </p>
+                {restored && result && (
+                  // A restore made on this visit may not be on `word` yet: it happened today.
+                  <p className="text-xs font-bold text-restore">
+                    Restored on {formatDay(word.restoredOn ?? today)}
+                  </p>
+                )}
                 {result ? (
                   <p className="line-clamp-2 text-sm text-ink-muted">{optionText(word.back)}</p>
                 ) : (
@@ -654,10 +669,11 @@ function History({
                       <button
                         type="button"
                         onClick={() => onPick(word.day)}
-                        className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-restore px-3 text-sm font-extrabold text-restore-ink transition active:scale-95"
+                        aria-label={`${waiting ? "Answer" : "Restore"} ${formatDay(word.day, "long")}`}
+                        title={waiting ? "Answer it" : "Restore"}
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-restore text-restore-ink transition hover:brightness-110 active:scale-90"
                       >
-                        <RestoreIcon className="h-4 w-4" />
-                        {waiting ? "Answer" : "Restore"}
+                        {waiting ? <PlayIcon className="h-4 w-4" /> : <RestoreIcon className="h-5 w-5" />}
                       </button>
                     )}
                   </div>

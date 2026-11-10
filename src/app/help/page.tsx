@@ -256,8 +256,8 @@ export default function HelpPage() {
             Missed a day? Tap it on the calendar to restore it. You get {RESTORES_PER_MONTH} restore
             cards each month, and each one costs {RESTORE_COST.toLocaleString("en-US")} XP. The
             day&apos;s word comes back for you to answer. If you knew it, the day counts in your streak
-            again. Restored days keep a mark of their own, outlined instead of filled, so you can
-            always tell them from days you answered on time. The meaning of a missed word stays
+            again. Restored days wear a small clock badge on the calendar and in the list, so you
+            can always tell them from days you answered on time. The meaning of a missed word stays
             hidden until you answer it.
           </span>
         </p>

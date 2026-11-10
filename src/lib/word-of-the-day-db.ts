@@ -26,6 +26,8 @@ export interface DailyWordView {
   result: WordResult | null;
   /** Brought back with a restore card after its day was missed. */
   restored: boolean;
+  /** The day the restore card was used, YYYY-MM-DD, or null. */
+  restoredOn: string | null;
 }
 
 export interface WordOfTheDay {
@@ -60,6 +62,7 @@ function toView(word: StoredWord): DailyWordView {
     deckName: word.deckName ?? "",
     result: isWordResult(word.result) ? word.result : null,
     restored: typeof word.restoredOn === "string",
+    restoredOn: typeof word.restoredOn === "string" ? word.restoredOn : null,
   };
 }
 

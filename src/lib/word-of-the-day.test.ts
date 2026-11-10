@@ -287,6 +287,7 @@ describe("Word of the Day in the database", () => {
 
     const data = await getWordOfTheDay("UTC", today);
     assert.equal(data.history.find((word) => word.day === "2026-11-03")?.restored, true);
+    assert.equal(data.history.find((word) => word.day === "2026-11-03")?.restoredOn, "2026-11-05");
     assert.equal(data.history.find((word) => word.day === "2026-11-02")?.restored, false);
   });
 
