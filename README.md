@@ -226,6 +226,19 @@ edited or deleted. Words from the last 30 days are not picked again while others
 are left. Days follow your time zone, like the streak. It never touches a card's
 schedule.
 
+**Restore cards.** A missed day on the calendar can be restored: tap it, pay
+1,000 XP, and the day's word comes back to answer late. There are 3 restore
+cards a calendar month, unused ones do not carry over, and they reach back as
+far as the calendar does (28 days), never before the first word was picked. A
+day the app was never opened gets a word picked when it is restored. Paying
+comes first, so a restore is never a free look at the meaning, and the list of
+earlier words hides the meaning of a day until it is answered. Knew it puts the
+day back in the streak; Missed it leaves it a miss. Restored days are drawn
+outlined with a small badge, on the calendar and in the list, so they never pass
+for on-time answers. The restore is stored on the day's row (`restoredOn`, the
+day it was used, and `restoreCost`), and the XP comes off the XP to spend the
+same way freezes do, never off the level.
+
 ## Boss words
 
 A word you keep forgetting comes back as a boss. A card that has lapsed three
