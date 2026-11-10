@@ -233,9 +233,9 @@ far as the calendar does (28 days), never before the first word was picked. A
 day the app was never opened gets a word picked when it is restored. Paying
 comes first, so a restore is never a free look at the meaning, and the list of
 earlier words hides the meaning of a day until it is answered. Knew it puts the
-day back in the streak; Missed it leaves it a miss. Restored days are drawn
-outlined with a small badge, on the calendar and in the list, so they never pass
-for on-time answers. The restore is stored on the day's row (`restoredOn`, the
+day back in the streak; Missed it leaves it a miss. Restored days wear a small
+clock badge, so they never pass for on-time answers: outlined on the calendar,
+and in the list with the day they were restored on. The restore is stored on the day's row (`restoredOn`, the
 day it was used, and `restoreCost`), and the XP comes off the XP to spend the
 same way freezes do, never off the level.
 
