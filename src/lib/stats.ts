@@ -15,12 +15,13 @@ import {
   type WeekDay,
 } from "@/lib/game";
 import { readFreezes, settleFreezes } from "@/lib/streak-freeze-db";
+import { restoreXpSpent } from "@/lib/word-of-the-day-db";
 
 /** Everything the HUD and the home screen show about the player. */
 export interface PlayerStats {
   /** All the XP ever earned. It sets the level, so spending XP never lowers it. */
   xp: number;
-  /** XP left to spend: everything earned, less what streak freezes cost. */
+  /** XP left to spend: everything earned, less what streak freezes and restore cards cost. */
   xpToSpend: number;
   /** Streak freezes waiting for a missed day. */
   freezes: number;
@@ -86,7 +87,7 @@ export async function getPlayerStats(
   const timeZone = safeTimeZone(timeZoneRaw);
   await connectToDatabase();
 
-  const [xpRows, beatenXp, dayRows, goal, bought] = await Promise.all([
+  const [xpRows, beatenXp, dayRows, goal, bought, restoreSpent] = await Promise.all([
     ReviewLog.aggregate<{ xp: number }>([
       { $group: { _id: null, xp: { $sum: { $ifNull: ["$xp", XP_PER_ANSWER] } } } },
     ]),
@@ -102,6 +103,7 @@ export async function getPlayerStats(
     ]),
     getDailyGoal(),
     readFreezes(),
+    restoreXpSpent(),
   ]);
 
   const xp = (xpRows[0]?.xp ?? 0) + beatenXp;
@@ -114,7 +116,7 @@ export async function getPlayerStats(
   return {
     xp,
     // An undo after buying a freeze can take back XP already spent.
-    xpToSpend: Math.max(0, xp - freezes.spent),
+    xpToSpend: Math.max(0, xp - freezes.spent - restoreSpent),
     freezes: freezes.held.length,
     lastFrozenDay: [...freezes.frozen].sort().at(-1) ?? null,
     level: level.level,

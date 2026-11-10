@@ -9,9 +9,25 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import mongoose from "mongoose";
 
 import { connectToDatabase } from "@/lib/db/connect";
-import { Card, DailyWord, Deck } from "@/lib/db/models";
-import { wordRecord } from "@/lib/word-of-the-day";
-import { answerWordOfTheDay, getWordOfTheDay } from "@/lib/word-of-the-day-db";
+import { Card, DailyWord, Deck, ReviewLog } from "@/lib/db/models";
+import { getPlayerStats } from "@/lib/stats";
+import {
+  cannotRestore,
+  nextMonthStart,
+  RESTORE_COST,
+  restoreCards,
+  RESTORES_PER_MONTH,
+  wordRecord,
+} from "@/lib/word-of-the-day";
+import {
+  answerWordOfTheDay,
+  getWordOfTheDay,
+  restoreWordDay,
+  restoreXpSpent,
+} from "@/lib/word-of-the-day-db";
+
+/** Noon UTC on `day`. */
+const at = (day: string) => new Date(`${day}T12:00:00Z`);
 
 describe("wordRecord", () => {
   it("counts known and missed days and ignores unanswered ones", () => {
@@ -66,6 +82,60 @@ describe("wordRecord", () => {
       ],
     );
   });
+
+  it("offers missed days for restoring, but not today or days before the first word", () => {
+    const record = wordRecord(
+      [
+        { day: "2026-11-01", result: "knew" },
+        { day: "2026-11-02", result: null },
+        { day: "2026-11-04", result: "knew", restored: true },
+        { day: "2026-11-05", result: null, restored: true },
+      ],
+      "2026-11-06",
+      8,
+    );
+    const offered = (day: string) => record.calendar.find((entry) => entry.day === day)?.canRestore;
+    assert.equal(offered("2026-10-31"), false); // before the first word
+    assert.equal(offered("2026-11-01"), false); // answered
+    assert.equal(offered("2026-11-02"), true); // picked, never answered
+    assert.equal(offered("2026-11-03"), true); // app not opened at all
+    assert.equal(offered("2026-11-04"), false); // already restored
+    assert.equal(offered("2026-11-05"), false); // restored, answer still to come
+    assert.equal(offered("2026-11-06"), false); // today
+    assert.equal(record.calendar.find((entry) => entry.day === "2026-11-04")?.restored, true);
+  });
+
+  it("counts a restored day that was known towards the streak", () => {
+    const record = wordRecord(
+      [
+        { day: "2026-11-03", result: "knew" },
+        { day: "2026-11-04", result: "knew", restored: true },
+        { day: "2026-11-05", result: "knew" },
+      ],
+      "2026-11-06",
+    );
+    assert.equal(record.streak, 3);
+    assert.equal(record.knew, 3);
+  });
+});
+
+describe("restore cards", () => {
+  it("come three a month and renew on the first", () => {
+    assert.deepEqual(restoreCards(1, "2026-11-10"), {
+      left: 2,
+      perMonth: RESTORES_PER_MONTH,
+      cost: RESTORE_COST,
+      renewsOn: "2026-12-01",
+    });
+    assert.equal(restoreCards(5, "2026-11-10").left, 0);
+    assert.equal(nextMonthStart("2026-12-31"), "2027-01-01");
+  });
+
+  it("need a card left and enough XP", () => {
+    assert.equal(cannotRestore(0, RESTORE_COST), null);
+    assert.match(cannotRestore(RESTORES_PER_MONTH, 99_999) ?? "", /used all 3/);
+    assert.match(cannotRestore(0, 999) ?? "", /costs 1,000 XP\. You have 999/);
+  });
 });
 
 describe("Word of the Day in the database", () => {
@@ -86,7 +156,12 @@ describe("Word of the Day in the database", () => {
   });
 
   beforeEach(async () => {
-    await Promise.all([Card.deleteMany({}), Deck.deleteMany({}), DailyWord.deleteMany({})]);
+    await Promise.all([
+      Card.deleteMany({}),
+      Deck.deleteMany({}),
+      DailyWord.deleteMany({}),
+      ReviewLog.deleteMany({}),
+    ]);
   });
 
   async function seed(learned: number, fresh = 0) {
@@ -173,4 +248,124 @@ describe("Word of the Day in the database", () => {
     assert.equal(next.today, null);
     assert.equal(next.history[0]?.front, data.today?.front);
   });
+
+  /** Words picked on 1 to 3 Nov; 1 and 2 known, 3 left unanswered, 4 never opened. */
+  async function missedTwo() {
+    await seed(6);
+    for (const day of ["2026-11-01", "2026-11-02", "2026-11-03"]) {
+      const data = await getWordOfTheDay("UTC", at(day));
+      if (day !== "2026-11-03") await answerWordOfTheDay(data.today?.day, "knew", "UTC", at(day));
+    }
+  }
+
+  it("restores a missed day for XP, then takes a late answer", async () => {
+    await missedTwo();
+    const today = at("2026-11-05");
+
+    const late = await answerWordOfTheDay("2026-11-03", "knew", "UTC", today);
+    assert.equal(late.ok, false, "a missed day needs a restore card first");
+
+    const restored = await restoreWordDay("2026-11-03", 2500, "UTC", today);
+    assert.ok(restored.ok);
+    assert.equal(restored.word.day, "2026-11-03");
+    assert.equal(restored.word.restored, true);
+    assert.equal(restored.word.result, null);
+    assert.equal(restored.restores.left, RESTORES_PER_MONTH - 1);
+    assert.equal(await restoreXpSpent(), RESTORE_COST);
+
+    // Asking again before answering hands the same word back, for nothing.
+    const again = await restoreWordDay("2026-11-03", 2500, "UTC", today);
+    assert.ok(again.ok);
+    assert.equal(again.word.front, restored.word.front);
+    assert.equal(await restoreXpSpent(), RESTORE_COST);
+
+    const answered = await answerWordOfTheDay("2026-11-03", "knew", "UTC", today);
+    assert.ok(answered.ok);
+    const day3 = answered.record.calendar.find((entry) => entry.day === "2026-11-03");
+    assert.equal(day3?.result, "knew");
+    assert.equal(day3?.restored, true);
+
+    const data = await getWordOfTheDay("UTC", today);
+    assert.equal(data.history.find((word) => word.day === "2026-11-03")?.restored, true);
+    assert.equal(data.history.find((word) => word.day === "2026-11-02")?.restored, false);
+  });
+
+  it("picks a word for a day the app was never opened, and mends the streak", async () => {
+    await missedTwo();
+    const today = at("2026-11-05");
+    assert.equal((await getWordOfTheDay("UTC", today)).record.streak, 0);
+
+    for (const day of ["2026-11-03", "2026-11-04"]) {
+      const restored = await restoreWordDay(day, 5000, "UTC", today);
+      assert.ok(restored.ok, day);
+      assert.ok(restored.word.front.startsWith("learned-"));
+      await answerWordOfTheDay(day, "knew", "UTC", today);
+    }
+    assert.equal((await getWordOfTheDay("UTC", today)).record.streak, 4);
+  });
+
+  it("refuses today, days before the first word, answered days, and too little XP", async () => {
+    await missedTwo();
+    const today = at("2026-11-05");
+    await getWordOfTheDay("UTC", today);
+
+    assert.match(failure(await restoreWordDay("2026-11-05", 5000, "UTC", today)), /not over/);
+    assert.match(failure(await restoreWordDay("2026-10-31", 5000, "UTC", today)), /too far back/);
+    assert.match(failure(await restoreWordDay("2026-11-02", 5000, "UTC", today)), /already answered/);
+    assert.match(failure(await restoreWordDay("2026-11-03", 999, "UTC", today)), /costs 1,000 XP/);
+    assert.equal(await restoreXpSpent(), 0);
+  });
+
+  it("gives three cards a month, and fresh ones the next month", async () => {
+    await seed(10);
+    await getWordOfTheDay("UTC", at("2026-11-01"));
+    const nov = at("2026-11-08");
+    for (const day of ["2026-11-02", "2026-11-03", "2026-11-04"]) {
+      assert.ok((await restoreWordDay(day, 99_999, "UTC", nov)).ok, day);
+    }
+    assert.match(failure(await restoreWordDay("2026-11-05", 99_999, "UTC", nov)), /used all 3/);
+
+    // On 1 Dec the calendar reaches back to 4 Nov, and the cards are back.
+    const dec = at("2026-12-01");
+    assert.match(failure(await restoreWordDay("2026-11-01", 99_999, "UTC", dec)), /too far back/);
+    // A day paid for in November can still be answered: it hands its word back.
+    assert.ok((await restoreWordDay("2026-11-03", 99_999, "UTC", dec)).ok);
+    const fresh = await restoreWordDay("2026-11-05", 99_999, "UTC", dec);
+    assert.ok(fresh.ok);
+    assert.equal(fresh.restores.left, RESTORES_PER_MONTH - 1);
+    assert.equal(fresh.restores.renewsOn, "2027-01-01");
+  });
+
+  it("takes the restore's XP off the XP to spend, not off the level", async () => {
+    await missedTwo();
+    const deck = await Deck.findOne().lean();
+    const card = await Card.findOne().lean();
+    const when = at("2026-11-04");
+    await ReviewLog.insertMany(
+      Array.from({ length: 25 }, () => ({
+        cardId: card?._id,
+        deckId: deck?._id,
+        grade: "good",
+        before: { state: "new", step: 0, intervalDays: 0, ease: 2.5, due: when, lapses: 0, reps: 0 },
+        intervalDaysAfter: 1,
+        easeAfter: 2.5,
+        reviewedAt: when,
+        xp: 100,
+      })),
+    );
+    const today = at("2026-11-05");
+    const before = await getPlayerStats("UTC", today);
+    assert.equal(before.xpToSpend, 2500);
+
+    assert.ok((await restoreWordDay("2026-11-03", before.xpToSpend, "UTC", today)).ok);
+    const after = await getPlayerStats("UTC", today);
+    assert.equal(after.xpToSpend, 1500);
+    assert.equal(after.xp, 2500);
+    assert.equal(after.level, before.level);
+  });
 });
+
+function failure(outcome: { ok: true } | { ok: false; message: string }): string {
+  assert.equal(outcome.ok, false);
+  return outcome.ok ? "" : outcome.message;
+}

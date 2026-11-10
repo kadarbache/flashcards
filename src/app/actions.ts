@@ -29,7 +29,13 @@ import type { Grade } from "@/lib/srs/types";
 import { getPlayerStats, setDailyGoal, type SessionResult } from "@/lib/stats";
 import { buyFreeze, type BuyOutcome } from "@/lib/streak-freeze-db";
 import type { WordResult } from "@/lib/word-of-the-day";
-import { answerWordOfTheDay, type AnswerOutcome } from "@/lib/word-of-the-day-db";
+import {
+  answerWordOfTheDay,
+  restoreWordDay,
+  restoreXpSpent,
+  type AnswerOutcome,
+  type RestoreOutcome,
+} from "@/lib/word-of-the-day-db";
 
 /** The next card plus fresh XP and streak numbers for the HUD. */
 async function withPlayer(next: Promise<NextCardResult>): Promise<SessionResult> {
@@ -342,14 +348,31 @@ export async function answerDailyWord(day: string, result: WordResult): Promise<
   return outcome;
 }
 
+/**
+ * Word of the Day: use a restore card on a missed day. Pays its XP and hands
+ * back the day's word to answer late.
+ */
+export async function restoreDailyWord(day: string): Promise<RestoreOutcome> {
+  await requireSession();
+  const timeZone = await requestTimeZone();
+  const player = await getPlayerStats(timeZone);
+  const outcome = await restoreWordDay(day, player.xpToSpend, timeZone);
+  if (outcome.ok) {
+    revalidatePath("/");
+    revalidatePath("/word");
+  }
+  return outcome;
+}
+
 /** Buy a streak freeze with XP. */
 export async function buyStreakFreeze(): Promise<BuyOutcome> {
   await requireSession();
   const timeZone = await requestTimeZone();
   // Reading the stats first also spends any freeze a missed day needs, which
   // can free a slot.
-  const player = await getPlayerStats(timeZone);
-  const outcome = await buyFreeze(player.xp, timeZone);
+  const [player, restoreSpent] = await Promise.all([getPlayerStats(timeZone), restoreXpSpent()]);
+  // Freezes are paid from what restore cards have not already used.
+  const outcome = await buyFreeze(player.xp - restoreSpent, timeZone);
   if (outcome.ok) revalidatePath("/");
   return outcome;
 }

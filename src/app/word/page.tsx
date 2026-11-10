@@ -2,6 +2,7 @@ import { SetupNotice } from "@/components/setup-notice";
 import { WordOfTheDaySession } from "@/components/word-of-the-day";
 import { aiVoiceReady } from "@/lib/pronunciation";
 import { requestTimeZone } from "@/lib/request-time-zone";
+import { getPlayerStats, type PlayerStats } from "@/lib/stats";
 import { getWordOfTheDay, type WordOfTheDay } from "@/lib/word-of-the-day-db";
 
 /** Today's word depends on the date, so the page is never prerendered. */
@@ -11,8 +12,9 @@ export default async function WordOfTheDayPage() {
   const timeZone = await requestTimeZone();
 
   let data: WordOfTheDay;
+  let player: PlayerStats;
   try {
-    data = await getWordOfTheDay(timeZone);
+    [data, player] = await Promise.all([getWordOfTheDay(timeZone), getPlayerStats(timeZone)]);
   } catch (error) {
     return <SetupNotice error={error} />;
   }
@@ -24,5 +26,12 @@ export default async function WordOfTheDayPage() {
     timeZone,
   }).format(new Date());
 
-  return <WordOfTheDaySession data={data} dateLabel={dateLabel} aiVoice={aiVoiceReady()} />;
+  return (
+    <WordOfTheDaySession
+      data={data}
+      dateLabel={dateLabel}
+      aiVoice={aiVoiceReady()}
+      xpToSpend={player.xpToSpend}
+    />
+  );
 }

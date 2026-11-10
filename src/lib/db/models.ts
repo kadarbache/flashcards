@@ -164,8 +164,21 @@ const dailyWordSchema = new Schema(
     /** Null until answered. */
     result: { type: String, enum: [...WORD_RESULTS], default: null },
     answeredAt: { type: Date, default: null },
+    /**
+     * The day (YYYY-MM-DD, player's calendar) a restore card brought this
+     * missed day back to answer late. Null for a day answered on time.
+     */
+    restoredOn: { type: String, default: null },
+    /** The XP the restore cost, kept per row so a later price change leaves past ones alone. */
+    restoreCost: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true },
+);
+
+// Counting the month's restore cards, and the XP spent on them.
+dailyWordSchema.index(
+  { restoredOn: 1 },
+  { partialFilterExpression: { restoredOn: { $type: "string" } } },
 );
 
 /**

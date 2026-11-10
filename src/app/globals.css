@@ -43,6 +43,9 @@
   /* Streak freezes. */
   --color-ice: #8fd8ff;
   --color-ice-ink: #0b2235;
+  /* Restore cards, and the Word of the Day answers they brought back late. */
+  --color-restore: #c3a6ff;
+  --color-restore-ink: #1f1238;
 
   /* One colour per grade, for the dark ground. */
   --color-again: #ff6b81;

@@ -66,8 +66,8 @@ export async function settleFreezes(
 export type BuyOutcome = { ok: true } | { ok: false; message: string };
 
 /**
- * Buy one freeze. It is paid from `earnedXp`, all the XP earned so far, less
- * what earlier freezes cost.
+ * Buy one freeze. It is paid from `earnedXp`, the XP earned so far (less what
+ * restore cards cost), less what earlier freezes cost.
  */
 export async function buyFreeze(
   earnedXp: number,

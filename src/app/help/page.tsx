@@ -12,6 +12,7 @@ import {
   FlipIcon,
   HeartIcon,
   MedalIcon,
+  RestoreIcon,
   SnowflakeIcon,
   SoundIcon,
   StarIcon,
@@ -22,6 +23,7 @@ import { panel, primaryButton } from "@/components/ui";
 import { BOSS_DAYS, BOSS_HEARTS, BOSS_MIN_LAPSES, BOSS_XP } from "@/lib/boss";
 import { COMBO_PAUSE_MS, DEFAULT_DAILY_GOAL, XP_PER_ANSWER } from "@/lib/game";
 import { FREEZE_COST, MAX_FREEZES } from "@/lib/streak-freeze";
+import { RESTORE_COST, RESTORES_PER_MONTH } from "@/lib/word-of-the-day";
 
 export const metadata: Metadata = { title: "How to play · Flashcards" };
 
@@ -247,6 +249,17 @@ export default function HelpPage() {
           head, flip, then tap Knew it or Missed it (or swipe right or left). You get one answer a
           day. The days you knew it and the days you missed it are counted, with a streak for days
           in a row. Like Practice and Blitz, it never changes your schedule.
+        </p>
+        <p className="flex gap-2 text-ink-muted">
+          <RestoreIcon className="mt-1 h-4 w-4 shrink-0 text-restore" />
+          <span>
+            Missed a day? Tap it on the calendar to restore it. You get {RESTORES_PER_MONTH} restore
+            cards each month, and each one costs {RESTORE_COST.toLocaleString("en-US")} XP. The
+            day&apos;s word comes back for you to answer. If you knew it, the day counts in your streak
+            again. Restored days keep a mark of their own, outlined instead of filled, so you can
+            always tell them from days you answered on time. The meaning of a missed word stays
+            hidden until you answer it.
+          </span>
         </p>
       </section>
 

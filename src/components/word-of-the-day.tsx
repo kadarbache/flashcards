@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { answerDailyWord } from "@/app/actions";
+import { answerDailyWord, restoreDailyWord } from "@/app/actions";
 import { buzz, Confetti } from "@/components/game/effects";
 import { JudgeButtons, JudgeCard } from "@/components/game/judge-card";
 import { play } from "@/components/game/sound";
@@ -14,12 +14,20 @@ import {
   FlameIcon,
   FlipIcon,
   HomeIcon,
+  RestoreIcon,
   SunIcon,
 } from "@/components/icons";
+import { Sheet } from "@/components/sheet";
 import { iconButton, panel, primaryButton, secondaryButton } from "@/components/ui";
 import { optionText } from "@/lib/blitz";
 import { formatDay } from "@/lib/game";
-import type { WordRecord, WordResult } from "@/lib/word-of-the-day";
+import {
+  cannotRestore,
+  type CalendarDay,
+  type RestoreCards,
+  type WordRecord,
+  type WordResult,
+} from "@/lib/word-of-the-day";
 import type { DailyWordView, WordOfTheDay } from "@/lib/word-of-the-day-db";
 
 /** The pill on the card's corner. */
@@ -30,10 +38,25 @@ const BADGE = (
   </span>
 );
 
+/** The pill on a card a restore card brought back, naming the day it belonged to. */
+function restoredBadge(day: string) {
+  return (
+    <span className="flex items-center gap-1.5 rounded-full bg-[#ece3ff] px-2.5 py-1 text-[#4b2a99]">
+      <RestoreIcon className="h-3.5 w-3.5" />
+      Restored · {formatDay(day)}
+    </span>
+  );
+}
+
 /**
  * Word of the Day: one learned word, once a day. Read the word, try to recall
  * it, flip, and say honestly whether you knew it. One answer per day; the
  * record below counts the days you knew it and the days you did not.
+ *
+ * A missed day can be brought back with a restore card: it costs XP, and the
+ * day's word takes the card's place to be answered late. Late answers keep a
+ * mark of their own on the calendar and in the list, so they never pass for
+ * on-time ones.
  *
  * Nothing here touches a card's schedule.
  */
@@ -41,33 +64,66 @@ export function WordOfTheDaySession({
   data,
   dateLabel,
   aiVoice,
+  xpToSpend,
 }: {
   data: WordOfTheDay;
   dateLabel: string;
   /** Read the word aloud with the AI voice, falling back to the device's. */
   aiVoice: boolean;
+  /** XP left to spend, which restore cards are paid from. */
+  xpToSpend: number;
 }) {
-  const word = data.today;
-  const [result, setResult] = useState<WordResult | null>(word?.result ?? null);
-  const [flipped, setFlipped] = useState(word?.result != null);
+  /** The word on the card: today's, or a missed day's brought back. */
+  const [active, setActive] = useState<DailyWordView | null>(data.today);
+  /** Answers given on this visit, shown before the server confirms them. */
+  const [answers, setAnswers] = useState<Record<string, WordResult>>({});
   const [record, setRecord] = useState<WordRecord>(data.record);
+  const [restores, setRestores] = useState<RestoreCards>(data.restores);
+  const [xp, setXp] = useState(xpToSpend);
+  const [flipped, setFlipped] = useState(data.today?.result != null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
   const [justAnswered, setJustAnswered] = useState(false);
+  /** The missed day the restore sheet is asking about. */
+  const [asking, setAsking] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  const days = useMemo(() => new Map(record.calendar.map((day) => [day.day, day])), [record]);
+
+  const resultOf = useCallback(
+    (word: DailyWordView): WordResult | null =>
+      answers[word.day] ?? days.get(word.day)?.result ?? word.result,
+    [answers, days],
+  );
+
+  const result = active ? resultOf(active) : null;
+  const late = active?.restored ?? false;
+
+  const show = useCallback(
+    (word: DailyWordView) => {
+      setActive(word);
+      setFlipped(resultOf(word) !== null);
+      setJustAnswered(false);
+      setError(null);
+    },
+    [resultOf],
+  );
 
   const flip = useCallback(() => {
-    if (!word || result) return;
+    if (!active || result) return;
     setFlipped((was) => !was);
     play("flip");
-  }, [result, word]);
+  }, [active, result]);
 
   const answer = useCallback(
     async (choice: WordResult) => {
-      if (!word || result || saving || !flipped) return;
+      if (!active || result || saving || !flipped) return;
+      const day = active.day;
       setSaving(true);
       setError(null);
-      setResult(choice);
+      setAnswers((current) => ({ ...current, [day]: choice }));
       setJustAnswered(true);
       if (choice === "knew") {
         play("good");
@@ -77,28 +133,81 @@ export function WordOfTheDaySession({
         play("again");
         buzz(40);
       }
-      try {
-        const outcome = await answerDailyWord(word.day, choice);
-        if (outcome.ok) {
-          setRecord(outcome.record);
-        } else {
-          setResult(null);
-          setJustAnswered(false);
-          setError(outcome.message);
-        }
-      } catch {
-        setResult(null);
+
+      const takeBack = (message: string) => {
+        setAnswers((current) => {
+          const next = { ...current };
+          delete next[day];
+          return next;
+        });
         setJustAnswered(false);
-        setError("Your answer could not be saved. Try again.");
+        setError(message);
+      };
+      try {
+        const outcome = await answerDailyWord(day, choice);
+        if (outcome.ok) setRecord(outcome.record);
+        else takeBack(outcome.message);
+      } catch {
+        takeBack("Your answer could not be saved. Try again.");
       } finally {
         setSaving(false);
       }
     },
-    [flipped, result, saving, word],
+    [active, flipped, result, saving],
   );
+
+  /** Restore `day`, or reopen it when it was paid for already. Returns why not, or null. */
+  async function bringBack(day: string): Promise<string | null> {
+    const leftBefore = restores.left;
+    try {
+      const outcome = await restoreDailyWord(day);
+      if (!outcome.ok) return outcome.message;
+      setRecord(outcome.record);
+      setRestores(outcome.restores);
+      if (outcome.restores.left < leftBefore) setXp((value) => value - outcome.restores.cost);
+      show(outcome.word);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return null;
+    } catch {
+      return "That didn't go through. Try again.";
+    }
+  }
+
+  /** A missed day tapped on the calendar or in the list. */
+  async function pick(day: string) {
+    const entry = days.get(day);
+    if (!entry || entry.result !== null || answers[day]) return;
+    if (entry.restored) {
+      // Paid for on an earlier visit: straight back to its word.
+      setError(null);
+      const message = await bringBack(day);
+      if (message) setError(message);
+      return;
+    }
+    if (!entry.canRestore) return;
+    play("tap");
+    setRestoreError(null);
+    setAsking(day);
+  }
+
+  async function confirmRestore() {
+    if (!asking || restoring) return;
+    setRestoring(true);
+    setRestoreError(null);
+    const message = await bringBack(asking);
+    setRestoring(false);
+    if (message) {
+      setRestoreError(message);
+      play("wrong");
+    } else {
+      setAsking(null);
+      play("level");
+    }
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (asking) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, button, a")) return;
@@ -115,7 +224,10 @@ export function WordOfTheDaySession({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [answer, flip]);
+  }, [answer, asking, flip]);
+
+  const today = data.today;
+  const backToToday = today && active && active.day !== today.day ? () => show(today) : null;
 
   return (
     <div className="relative mx-auto max-w-lg space-y-5">
@@ -140,14 +252,33 @@ export function WordOfTheDaySession({
         )}
       </div>
 
-      {word ? (
+      {active && late && (
+        <div className="flex items-center gap-3 rounded-2xl border border-[#4a3a7a] bg-[#1f1838] px-4 py-3">
+          <RestoreIcon className="h-5 w-5 shrink-0 text-restore" />
+          <p className="min-w-0 flex-1 text-sm font-bold text-restore">
+            Answering {formatDay(active.day, "long")} late
+          </p>
+          {backToToday && (
+            <button
+              type="button"
+              onClick={backToToday}
+              className="shrink-0 text-sm font-extrabold text-ink underline-offset-4 hover:underline"
+            >
+              Today&apos;s word
+            </button>
+          )}
+        </div>
+      )}
+
+      {active ? (
         <>
           <JudgeCard
-            label="Word of the day"
-            front={word.front}
-            back={word.back}
-            deckName={word.deckName}
-            badge={BADGE}
+            key={active.day}
+            label={late ? `Word for ${formatDay(active.day, "long")}` : "Word of the day"}
+            front={active.front}
+            back={active.back}
+            deckName={active.deckName}
+            badge={late ? restoredBadge(active.day) : BADGE}
             question="Do you know this word?"
             flipped={flipped}
             result={result}
@@ -176,9 +307,18 @@ export function WordOfTheDaySession({
 
           {error && <p className="text-center text-sm font-bold text-again">{error}</p>}
 
-          {result && (
-            <ResultBanner result={result} streak={record.streak} fresh={justAnswered} />
-          )}
+          {result &&
+            (late ? (
+              <RestoredBanner
+                result={result}
+                day={active.day}
+                streak={record.streak}
+                fresh={justAnswered}
+                onBack={backToToday}
+              />
+            ) : (
+              <ResultBanner result={result} streak={record.streak} fresh={justAnswered} />
+            ))}
         </>
       ) : (
         <div className={`${panel} px-6 py-12 text-center`}>
@@ -195,9 +335,30 @@ export function WordOfTheDaySession({
         </div>
       )}
 
-      <RecordPanel record={record} />
+      <RecordPanel record={record} restores={restores} onPick={(day) => void pick(day)} />
 
-      {data.history.length > 0 && <History words={data.history} />}
+      {data.history.length > 0 && (
+        <History
+          words={data.history}
+          days={days}
+          answers={answers}
+          onPick={(day) => void pick(day)}
+        />
+      )}
+
+      <Sheet open={asking !== null} onClose={() => setAsking(null)} label="Restore a missed day">
+        {asking && (
+          <RestoreSheet
+            day={asking}
+            restores={restores}
+            xp={xp}
+            pending={restoring}
+            error={restoreError}
+            onConfirm={() => void confirmRestore()}
+            onCancel={() => setAsking(null)}
+          />
+        )}
+      </Sheet>
     </div>
   );
 }
@@ -224,7 +385,58 @@ function ResultBanner({ result, streak, fresh }: { result: WordResult; streak: n
   );
 }
 
-function RecordPanel({ record }: { record: WordRecord }) {
+/** The answer to a day brought back late. */
+function RestoredBanner({
+  result,
+  day,
+  streak,
+  fresh,
+  onBack,
+}: {
+  result: WordResult;
+  day: string;
+  streak: number;
+  fresh: boolean;
+  onBack: (() => void) | null;
+}) {
+  const knew = result === "knew";
+  const name = formatDay(day, "long");
+  return (
+    <div
+      className={`${fresh ? "anim-pop-in" : ""} space-y-4 rounded-3xl border p-5 text-center ${
+        knew ? "border-[#1f6b4f] bg-[#0f2a20]" : "border-[#6b1f30] bg-[#2a0f16]"
+      }`}
+    >
+      <div>
+        <p className={`text-2xl font-extrabold ${knew ? "text-good" : "text-again"}`}>
+          {knew ? "Day restored!" : "Still a miss"}
+        </p>
+        <p className="mt-1 text-sm text-ink-muted">
+          {knew
+            ? `${name} counts again${streak > 1 ? `, and you are on ${streak} days in a row` : ""}. It keeps its restored mark.`
+            : `${name} stays a miss. Read the word once more before you go.`}
+        </p>
+      </div>
+      {onBack && (
+        <button type="button" onClick={onBack} className={`${secondaryButton} w-full`}>
+          <SunIcon className="h-5 w-5 text-gold" />
+          Back to today&apos;s word
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RecordPanel({
+  record,
+  restores,
+  onPick,
+}: {
+  record: WordRecord;
+  restores: RestoreCards;
+  onPick: (day: string) => void;
+}) {
+  const missedDays = record.calendar.filter((day) => day.canRestore).length;
   return (
     <section className={`${panel} space-y-4`}>
       <h2 className="text-lg font-extrabold">Your record</h2>
@@ -235,23 +447,9 @@ function RecordPanel({ record }: { record: WordRecord }) {
       </dl>
       <div>
         <ol className="grid grid-cols-7 gap-1.5" aria-label={`The last ${record.calendar.length} days`}>
-          {record.calendar.map((day) => {
-            let tone = "bg-surface-high text-ink-muted";
-            if (day.result === "knew") tone = "bg-good text-paper-ink";
-            else if (day.result === "missed") tone = "bg-again text-paper-ink";
-            else if (day.isToday) tone = "border-2 border-dashed border-gold text-gold";
-            const status =
-              day.result === "knew" ? "knew it" : day.result === "missed" ? "missed it" : "no answer";
-            return (
-              <li
-                key={day.day}
-                className={`flex aspect-square items-center justify-center rounded-xl text-xs font-extrabold tabular-nums ${tone}`}
-                title={`${formatDay(day.day)}: ${status}`}
-              >
-                {day.date}
-              </li>
-            );
-          })}
+          {record.calendar.map((day) => (
+            <DayCell key={day.day} day={day} onPick={onPick} />
+          ))}
         </ol>
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
           <span className="flex items-center gap-1.5">
@@ -261,11 +459,107 @@ function RecordPanel({ record }: { record: WordRecord }) {
             <span className="h-3 w-3 rounded bg-again" /> Missed it
           </span>
           <span className="flex items-center gap-1.5">
+            <RestoreMark /> Restored late
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded bg-surface-high" /> Not played
           </span>
         </p>
       </div>
+      <RestoreShelf restores={restores} missedDays={missedDays} />
     </section>
+  );
+}
+
+/** The little badge a restored day wears. */
+function RestoreMark({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`flex h-4 w-4 items-center justify-center rounded-full bg-restore text-restore-ink ${className}`}
+      aria-hidden="true"
+    >
+      <RestoreIcon className="h-2.5 w-2.5" />
+    </span>
+  );
+}
+
+function DayCell({ day, onPick }: { day: CalendarDay; onPick: (day: string) => void }) {
+  const waiting = day.restored && day.result === null;
+  let tone = "bg-surface-high text-ink-muted";
+  if (day.result === "knew") {
+    tone = day.restored ? "border-2 border-good bg-good/15 text-good" : "bg-good text-paper-ink";
+  } else if (day.result === "missed") {
+    tone = day.restored ? "border-2 border-again bg-again/15 text-again" : "bg-again text-paper-ink";
+  } else if (waiting) {
+    tone = "border-2 border-dashed border-restore bg-restore/10 text-restore";
+  } else if (day.canRestore) {
+    tone = "border border-dashed border-restore/45 bg-surface-high text-ink-muted";
+  } else if (day.isToday) {
+    tone = "border-2 border-dashed border-gold text-gold";
+  }
+
+  let status = "not played";
+  if (day.result) status = `${day.result === "knew" ? "knew it" : "missed it"}${day.restored ? ", restored late" : ""}`;
+  else if (waiting) status = "restored, answer still to come";
+  else if (day.canRestore) status = "missed, tap to restore";
+
+  const cell = `relative flex aspect-square w-full flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-extrabold tabular-nums ${tone}`;
+  const label = `${formatDay(day.day)}: ${status}`;
+
+  if (day.canRestore || waiting) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => onPick(day.day)}
+          className={`${cell} transition hover:ring-2 hover:ring-restore active:scale-95`}
+          title={label}
+          aria-label={label}
+        >
+          {day.date}
+          {day.canRestore && <RestoreIcon className="h-2.5 w-2.5 text-restore/80" />}
+          {waiting && <RestoreMark className="absolute -top-1.5 -right-1.5" />}
+        </button>
+      </li>
+    );
+  }
+  return (
+    <li className={cell} title={label}>
+      {day.date}
+      {day.restored && <RestoreMark className="absolute -top-1.5 -right-1.5" />}
+    </li>
+  );
+}
+
+/** The month's restore cards, as card-shaped slots. */
+function RestoreShelf({ restores, missedDays }: { restores: RestoreCards; missedDays: number }) {
+  const cost = `${restores.cost.toLocaleString("en-US")} XP`;
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-surface-high p-3">
+      <div className="flex shrink-0 gap-1.5" aria-hidden="true">
+        {Array.from({ length: restores.perMonth }, (_, slot) => (
+          <span
+            key={slot}
+            className={`flex h-10 w-7 items-center justify-center rounded-lg ${
+              slot < restores.left
+                ? "bg-restore text-restore-ink shadow-[0_0_16px_-4px_var(--color-restore)]"
+                : "border-2 border-dashed border-border-subtle text-border-subtle"
+            }`}
+          >
+            <RestoreIcon className="h-4 w-4" />
+          </span>
+        ))}
+      </div>
+      <div className="min-w-0">
+        <p className="font-extrabold">
+          {restores.left} of {restores.perMonth} restore cards left
+        </p>
+        <p className="text-xs text-ink-muted">
+          {missedDays > 0 && restores.left > 0 ? "Tap a missed day to bring it back. " : ""}
+          {cost} each. New cards on {formatDay(restores.renewsOn)}.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -279,45 +573,188 @@ function Stat({ label, value, color, hint }: { label: string; value: number; col
   );
 }
 
-function History({ words }: { words: DailyWordView[] }) {
+/** The round badge at the start of a history row. Late answers are outlined, not filled. */
+function ResultDot({ result, restored }: { result: WordResult | null; restored: boolean }) {
+  let tone = "bg-surface-high text-ink-muted";
+  if (result === "knew") tone = restored ? "border-2 border-good text-good" : "bg-good text-paper-ink";
+  else if (result === "missed") tone = restored ? "border-2 border-again text-again" : "bg-again text-paper-ink";
+  else if (restored) tone = "border-2 border-dashed border-restore text-restore";
+
+  let label = result === "knew" ? "Knew it" : result === "missed" ? "Missed it" : "Not played";
+  if (restored) label += result ? ", restored late" : ", restored";
+
+  return (
+    <span
+      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}
+      aria-label={label}
+    >
+      {result === "knew" ? (
+        <CheckIcon className="h-4 w-4" />
+      ) : result === "missed" ? (
+        <CloseIcon className="h-4 w-4" />
+      ) : restored ? (
+        <RestoreIcon className="h-4 w-4" />
+      ) : (
+        <span className="text-xs font-extrabold">–</span>
+      )}
+    </span>
+  );
+}
+
+function History({
+  words,
+  days,
+  answers,
+  onPick,
+}: {
+  words: DailyWordView[];
+  days: ReadonlyMap<string, CalendarDay>;
+  answers: Record<string, WordResult>;
+  onPick: (day: string) => void;
+}) {
   return (
     <section className={`${panel} space-y-3`}>
       <h2 className="text-lg font-extrabold">Earlier words</h2>
       <ul className="divide-y divide-border-subtle">
-        {words.map((word) => (
-          <li key={word.day} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-            <span
-              className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                word.result === "knew"
-                  ? "bg-good text-paper-ink"
-                  : word.result === "missed"
-                    ? "bg-again text-paper-ink"
-                    : "bg-surface-high text-ink-muted"
-              }`}
-              aria-label={word.result === "knew" ? "Knew it" : word.result === "missed" ? "Missed it" : "Not played"}
-            >
-              {word.result === "knew" ? (
-                <CheckIcon className="h-4 w-4" />
-              ) : word.result === "missed" ? (
-                <CloseIcon className="h-4 w-4" />
-              ) : (
-                <span className="text-xs font-extrabold">–</span>
-              )}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="flex items-baseline justify-between gap-2">
-                <span className="truncate font-extrabold">{word.front}</span>
-                <span className="shrink-0 text-xs text-ink-muted">{formatDay(word.day)}</span>
-              </p>
-              <p className="line-clamp-2 text-sm text-ink-muted">{optionText(word.back)}</p>
-            </div>
-          </li>
-        ))}
+        {words.map((word) => {
+          const day = days.get(word.day);
+          const result = answers[word.day] ?? day?.result ?? word.result;
+          const restored = day?.restored ?? word.restored;
+          const waiting = restored && result === null;
+          const canRestore = !result && (day?.canRestore ?? false);
+          return (
+            <li key={word.day} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+              <ResultDot result={result} restored={restored} />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-baseline justify-between gap-2">
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate font-extrabold">{word.front}</span>
+                    {restored && (
+                      <span className="shrink-0 rounded-full bg-restore/15 px-2 py-0.5 text-[11px] font-extrabold text-restore">
+                        Restored
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-xs text-ink-muted">{formatDay(word.day)}</span>
+                </p>
+                {result ? (
+                  <p className="line-clamp-2 text-sm text-ink-muted">{optionText(word.back)}</p>
+                ) : (
+                  // The meaning stays hidden until the day is answered, so a
+                  // restore is still a real test.
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <p className="text-sm text-ink-muted">
+                      {waiting
+                        ? "Paid for. Your answer is still to come."
+                        : canRestore
+                          ? "Missed. Restore it to answer."
+                          : "Not played."}
+                    </p>
+                    {(waiting || canRestore) && (
+                      <button
+                        type="button"
+                        onClick={() => onPick(word.day)}
+                        className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-restore px-3 text-sm font-extrabold text-restore-ink transition active:scale-95"
+                      >
+                        <RestoreIcon className="h-4 w-4" />
+                        {waiting ? "Answer" : "Restore"}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
       <Link href="/" className={`${secondaryButton} w-full`}>
         <HomeIcon className="h-5 w-5" />
         Home
       </Link>
     </section>
+  );
+}
+
+/** Asks before spending a restore card: it is a lot of XP to lose to a stray tap. */
+function RestoreSheet({
+  day,
+  restores,
+  xp,
+  pending,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  day: string;
+  restores: RestoreCards;
+  xp: number;
+  pending: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const refusal = cannotRestore(restores.perMonth - restores.left, xp);
+  const price = `${restores.cost.toLocaleString("en-US")} XP`;
+  const problem = error ?? refusal;
+
+  return (
+    <div className="space-y-5 p-6">
+      <div className="flex items-center gap-3">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-restore text-restore-ink">
+          <RestoreIcon className="h-7 w-7" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-xl leading-tight font-extrabold">Restore {formatDay(day, "long")}?</h2>
+          <p className="text-sm text-ink-muted">You never answered this day&apos;s word.</p>
+        </div>
+      </div>
+
+      <p className="text-ink-muted">
+        The word comes back for you to answer now. If you knew it, the day goes back into your streak.
+        Either way the day keeps a restored mark, so it never looks like an on-time answer.
+      </p>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-2xl bg-surface-high px-3 py-3">
+          <p className="text-xs font-semibold text-ink-muted">Restore cards</p>
+          <p className="mt-1 text-lg font-extrabold text-restore tabular-nums">
+            {restores.left} of {restores.perMonth} left
+          </p>
+          <p className="text-[11px] text-ink-muted">New ones on {formatDay(restores.renewsOn)}</p>
+        </div>
+        <div className="rounded-2xl bg-surface-high px-3 py-3">
+          <p className="text-xs font-semibold text-ink-muted">Costs</p>
+          <p className="mt-1 text-lg font-extrabold text-gold tabular-nums">{price}</p>
+          <p className="text-[11px] text-ink-muted tabular-nums">You have {xp.toLocaleString("en-US")}</p>
+        </div>
+      </div>
+
+      {problem && (
+        <p role="alert" className="text-sm font-bold text-again">
+          {problem}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={refusal !== null || pending}
+          className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-restore px-5 text-base font-extrabold text-restore-ink transition active:scale-[0.97] disabled:opacity-50"
+        >
+          <RestoreIcon className="h-5 w-5" />
+          {pending ? "Restoring…" : `Restore · ${price}`}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={pending}
+          data-autofocus
+          className={`${secondaryButton} flex-none`}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }

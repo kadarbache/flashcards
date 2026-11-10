@@ -299,6 +299,17 @@ export function SnowflakeIcon({ className }: IconProps) {
   );
 }
 
+/** A restore card: a clock turning back, for a missed day brought back. */
+export function RestoreIcon({ className }: IconProps) {
+  return (
+    <Line className={className}>
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
+      <path d="M3.2 3.8v4.4h4.4" />
+      <path d="M12 7.8V12l2.8 1.8" />
+    </Line>
+  );
+}
+
 /** The word finder: a magnifying glass, for a word you can describe but not name. */
 export function SearchIcon({ className }: IconProps) {
   return (
